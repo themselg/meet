@@ -45,6 +45,34 @@ cp "$REPO_DIR/system/chromium-policy.json" /etc/chromium/policies/managed/meetin
 install -m 0440 "$REPO_DIR/system/sudoers-meeting-room" /etc/sudoers.d/meeting-room
 visudo -cf /etc/sudoers.d/meeting-room
 
+echo "==> Direccion mostrada en la pantalla del kiosko"
+if [ -f /etc/meeting-room/server.env ]; then
+  echo "(/etc/meeting-room/server.env ya existe, se conserva; editalo para cambiarla)"
+else
+  DISPLAY_CHOICE=1
+  if [ -t 0 ]; then
+    echo "La pantalla de inicio dice \"abre <direccion> en tu navegador\"."
+    echo "  1) Usar la IP del dispositivo (detectada automaticamente)"
+    echo "  2) Usar un dominio propio (ej. meet.iaan.mx)"
+    read -rp "Opcion [1]: " DISPLAY_CHOICE
+    DISPLAY_CHOICE=${DISPLAY_CHOICE:-1}
+  fi
+  DISPLAY_URL=""
+  if [ "$DISPLAY_CHOICE" = "2" ]; then
+    read -rp "Dominio (con o sin https://): " DISPLAY_INPUT
+    case "$DISPLAY_INPUT" in
+      "")                 ;;
+      http://*|https://*) DISPLAY_URL="$DISPLAY_INPUT" ;;
+      *)                  DISPLAY_URL="https://$DISPLAY_INPUT" ;;
+    esac
+  fi
+  cat > /etc/meeting-room/server.env <<EOF
+# Direccion que muestra la pantalla de inicio del kiosko.
+# Vacio = usar la IP del dispositivo detectada automaticamente.
+MEETING_DISPLAY_URL=$DISPLAY_URL
+EOF
+fi
+
 echo "==> Servicios systemd"
 cp "$REPO_DIR/system/meeting-room-server.service" /etc/systemd/system/
 cp "$REPO_DIR/system/meeting-room-kiosk.service" /etc/systemd/system/

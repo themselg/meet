@@ -61,8 +61,13 @@ El instalador: habilita EPEL e instala `cage`/`chromium`/PipeWire, crea los usua
 política de Chromium (auto-permite cámara/micrófono solo en los dominios de reunión),
 abre el puerto 80 en firewalld, deshabilita `getty@tty1` y habilita ambos servicios.
 
+Durante la instalación pregunta qué dirección debe mostrar la pantalla de inicio
+del kiosko: la IP del dispositivo (automática) o un dominio propio (p. ej.
+`meet.iaan.mx`). Queda en `/etc/meeting-room/server.env` (`MEETING_DISPLAY_URL`);
+edítalo y reinicia `meeting-room-server` para cambiarla después.
+
 **Actualizar:** `git pull && sudo ./install.sh` (es idempotente; conserva
-`/etc/meeting-room/kiosk.env`).
+`/etc/meeting-room/kiosk.env` y `/etc/meeting-room/server.env`).
 
 ### Verificación
 

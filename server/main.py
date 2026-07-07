@@ -9,6 +9,7 @@ Servidor FastAPI que:
 
 import asyncio
 import json
+import os
 import socket
 import subprocess
 import time
@@ -34,6 +35,10 @@ ALLOWED_DOMAINS = (
 
 KIOSK_SERVICE = "meeting-room-kiosk.service"
 SSE_KEEPALIVE_SECONDS = 15
+
+# Direccion fija a mostrar en la pantalla del kiosko (p. ej. https://meet.iaan.mx).
+# Vacia = detectar la IP del dispositivo. La define /etc/meeting-room/server.env.
+DISPLAY_URL_OVERRIDE = os.environ.get("MEETING_DISPLAY_URL", "").strip() or None
 
 app = FastAPI(title="Universal Meeting Room", docs_url=None, redoc_url=None)
 
@@ -132,7 +137,9 @@ async def status(request: Request) -> dict:
     server = request.scope.get("server") or (None, None)
     port = server[1]
     ip = get_local_ip()
-    if ip:
+    if DISPLAY_URL_OVERRIDE:
+        display_url = DISPLAY_URL_OVERRIDE
+    elif ip:
         display_url = f"http://{ip}" if port in (80, None) else f"http://{ip}:{port}"
     else:
         display_url = None
