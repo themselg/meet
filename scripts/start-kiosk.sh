@@ -24,6 +24,10 @@ FLAGS=(
   --ozone-platform=wayland
   --enable-features=WebRTCPipeWireCapturer
   --password-store=basic
+  # En kiosko la burbuja de permisos cam/mic no se puede aceptar (no hay
+  # toolbar); esto auto-concede el permiso. La navegacion ya esta limitada
+  # a la allowlist de dominios de reunion.
+  --use-fake-ui-for-media-stream
 )
 
 if [ "${VM_MODE:-0}" = "1" ]; then
@@ -33,6 +37,9 @@ if [ "${VM_MODE:-0}" = "1" ]; then
   export WLR_RENDERER_ALLOW_SOFTWARE=1
   export LIBGL_ALWAYS_SOFTWARE=1
   FLAGS+=(--disable-gpu)
+  # La VM no tiene camara/microfono: dispositivos falsos de prueba
+  # (camara animada + tono) para validar el flujo completo.
+  FLAGS+=(--use-fake-device-for-media-stream)
 fi
 
 if [ -n "${CHROMIUM_EXTRA_FLAGS:-}" ]; then
