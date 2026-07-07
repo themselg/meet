@@ -69,6 +69,9 @@
   #meetingView header button { padding: 0.5rem 1rem; font-size: 0.9rem; }
   #screenWrap { position: relative; flex: 1; min-height: 0; }
   #screen { position: absolute; inset: 0; }
+  /* Siempre el cursor local sobre el visor: el del compositor va oculto en la
+     sala y el que enviara el servidor VNC se ignora (evita flecha con retraso) */
+  #screen canvas { cursor: default !important; }
   #screenNote {
     position: absolute; inset: 0; z-index: 1;
     display: flex; align-items: center; justify-content: center;

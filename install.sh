@@ -95,6 +95,9 @@ if systemctl is-active -q firewalld; then
   firewall-cmd --reload >/dev/null
 fi
 
+echo "==> Tema de cursor invisible (control remoto sin retraso de mouse)"
+python3 "$REPO_DIR/scripts/make-hidden-cursor.py" /usr/share/icons/meeting-room-hidden
+
 echo "==> SELinux"
 command -v restorecon &>/dev/null && restorecon -R "$APP_DIR" || true
 

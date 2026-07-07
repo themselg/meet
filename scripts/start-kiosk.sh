@@ -6,6 +6,12 @@ SERVER_URL="${SERVER_URL:-http://localhost}"
 KIOSK_URL="${KIOSK_URL:-$SERVER_URL/kiosk}"
 CHROMIUM_BIN="${CHROMIUM_BIN:-/usr/bin/chromium-browser}"
 
+# Cursor del compositor invisible: el control remoto usa el cursor local del
+# navegador (sin retraso) y la TV no muestra una flecha moviendose sola.
+if [ "${KIOSK_HIDE_CURSOR:-1}" = "1" ] && [ -d /usr/share/icons/meeting-room-hidden ]; then
+  export XCURSOR_THEME=meeting-room-hidden
+fi
+
 echo "Esperando al backend en $SERVER_URL ..."
 for _ in $(seq 1 60); do
   if curl -fsS --max-time 2 "$SERVER_URL/api/status" >/dev/null 2>&1; then
