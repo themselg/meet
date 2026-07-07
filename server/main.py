@@ -17,8 +17,9 @@ import time
 from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -45,7 +46,12 @@ DISPLAY_URL_OVERRIDE = os.environ.get("MEETING_DISPLAY_URL", "").strip() or None
 # Solo aplica en servicios que lo aceptan por URL (Jitsi, Zoom web).
 ROOM_NAME = os.environ.get("MEETING_ROOM_NAME", "").strip() or None
 
+# wayvnc del kiosko (solo localhost); /api/vnc lo puentea a WebSocket para noVNC.
+VNC_HOST = "127.0.0.1"
+VNC_PORT = int(os.environ.get("KIOSK_VNC_PORT", "5900"))
+
 app = FastAPI(title="Universal Meeting Room", docs_url=None, redoc_url=None)
+app.mount("/novnc", StaticFiles(directory=STATIC_DIR / "novnc"), name="novnc")
 
 
 class MeetingRequest(BaseModel):
@@ -208,6 +214,48 @@ async def end_meeting() -> dict:
     room.reset()
     await room.broadcast(sse_event("end", {}))
     return {"ok": True, "kiosk_restart": restart_kiosk()}
+
+
+@app.websocket("/api/vnc")
+async def vnc_proxy(ws: WebSocket) -> None:
+    """Puente WebSocket <-> TCP hacia el wayvnc del kiosko (RFB binario).
+
+    Es lo que hace websockify, pero integrado: noVNC en la pagina de control
+    se conecta aqui y ve/controla la pantalla de la sala.
+    """
+    await ws.accept(subprotocol="binary")
+    try:
+        reader, writer = await asyncio.open_connection(VNC_HOST, VNC_PORT)
+    except OSError:
+        await ws.close(code=1011, reason="VNC del kiosko no disponible")
+        return
+
+    async def ws_to_tcp() -> None:
+        try:
+            while True:
+                writer.write(await ws.receive_bytes())
+                await writer.drain()
+        except (WebSocketDisconnect, RuntimeError, OSError):
+            pass
+
+    async def tcp_to_ws() -> None:
+        try:
+            while data := await reader.read(65536):
+                await ws.send_bytes(data)
+        except (RuntimeError, OSError):
+            pass
+
+    tasks = [asyncio.create_task(ws_to_tcp()), asyncio.create_task(tcp_to_ws())]
+    try:
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
+        writer.close()
+        try:
+            await ws.close()
+        except RuntimeError:
+            pass
 
 
 @app.get("/api/events")

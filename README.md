@@ -125,19 +125,21 @@ la sala), o iniciando sesión una sola vez en el Chromium del kiosko con una
 cuenta llamada como la sala — el perfil persiste entre reuniones y ambos toman
 el nombre de la cuenta. Automatizar ese pre-join vía extensión queda en fase 2.
 
-## Soporte remoto (VNC sobre SSH)
+## Pantalla de la sala en la página de control
 
-El kiosko corre `wayvnc` dentro de la sesión de cage — pantalla, teclado y mouse
-remotos, útil para el pre-join de Teams/Meet o para diagnosticar sin ir a la sala.
-Escucha **solo en localhost**: el único camino de entrada es un túnel SSH.
+Cuando hay reunión activa, la página de control muestra el escritorio del kiosko
+**embebido y con control** (clic y teclado), junto al botón "Terminar reunión".
+Sirve para el pre-join de Teams/Meet (nombre, toggles de cámara/mic) sin teclado
+en la sala.
 
-```bash
-ssh -L 5900:localhost:5900 usuario@IP_DEL_APPLIANCE
-# y en otra terminal / cliente VNC (Remmina, GNOME Conexiones):
-#   vnc://localhost:5900
-```
+Cadena: `wayvnc` corre dentro de la sesión de cage escuchando **solo en
+localhost:5900** → el backend lo puentea por WebSocket en `/api/vnc` → el visor
+noVNC (vendorizado en `server/static/novnc/`) lo pinta en `index.html`. Nada de
+VNC queda expuesto a la red; quien ve la página de control ve la pantalla.
 
-Se desactiva con `KIOSK_VNC=0` en `/etc/meeting-room/kiosk.env`.
+También puedes conectarte con un cliente VNC clásico vía túnel SSH
+(`ssh -L 5900:localhost:5900 usuario@appliance` → `vnc://localhost:5900`).
+Se desactiva todo con `KIOSK_VNC=0` en `/etc/meeting-room/kiosk.env`.
 
 ## Pendiente (fase 2)
 

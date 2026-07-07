@@ -10,6 +10,7 @@ fi
 
 PORT=8123
 export MEETING_ROOM_NAME="Sala Test"
+export KIOSK_VNC_PORT=59123
 (cd server && exec ../.venv/bin/uvicorn main:app --host 127.0.0.1 --port $PORT --log-level warning) &
 PID=$!
 trap 'kill $PID 2>/dev/null || true' EXIT
@@ -76,6 +77,35 @@ else
   fail=1
 fi
 
+# Puente VNC: un servidor TCP falso responde el saludo RFB y debe llegar por WS
+if .venv/bin/python - <<EOF
+import asyncio, websockets
+
+async def main():
+    async def handler(reader, writer):
+        writer.write(b"RFB 003.008\n")
+        await writer.drain()
+        await asyncio.sleep(0.3)
+        writer.close()
+
+    server = await asyncio.start_server(handler, "127.0.0.1", $KIOSK_VNC_PORT)
+    async with websockets.connect(
+        "ws://localhost:$PORT/api/vnc", subprotocols=["binary"]
+    ) as ws:
+        data = await asyncio.wait_for(ws.recv(), 3)
+        assert data.startswith(b"RFB"), data
+    server.close()
+
+asyncio.run(main())
+EOF
+then
+  echo "OK   puente WebSocket->VNC transmite RFB"
+else
+  echo "FAIL puente WebSocket->VNC"
+  fail=1
+fi
+
+check "GET /novnc/core/rfb.js (visor)"     200 "localhost:$PORT/novnc/core/rfb.js"
 check "POST /api/end"                      200 -X POST "localhost:$PORT/api/end"
 
 status=$(curl -s "localhost:$PORT/api/status")
