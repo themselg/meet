@@ -75,13 +75,18 @@ Desde otra máquina: abrir `http://IP_DEL_DISPOSITIVO`, pegar
 `https://meet.jit.si/prueba-sala-123` (Jitsi no pide cuenta) → la TV debe entrar a
 la sala en segundos. Probar también **Terminar reunión**.
 
-## Pasar de VM a hardware real
+## Modo VM vs. hardware real
 
-1. Editar `/etc/meeting-room/kiosk.env` → `VM_MODE=0` (activa aceleración GPU real).
-2. `systemctl restart meeting-room-kiosk`.
-3. Conectar cámara y speakerphone USB; entrar a una sala Jitsi y confirmar que no
+El predeterminado es **hardware real** (`VM_MODE=0`: cage y Chromium usan la GPU).
+Para probar en una **VM sin aceleración 3D**, edita `/etc/meeting-room/kiosk.env`
+→ `VM_MODE=1` (compositor por software pixman + `--disable-gpu`) y
+`systemctl restart meeting-room-kiosk`. El archivo se conserva entre updates.
+
+En hardware real, al estrenar el equipo:
+
+1. Conectar cámara y speakerphone USB; entrar a una sala Jitsi y confirmar que no
    aparece prompt de permisos (lo cubre la política de Chromium) y que hay audio/video.
-4. Si el audio no aparece: `systemctl --user -M kiosk@ status pipewire wireplumber`.
+2. Si el audio no aparece: `systemctl --user -M kiosk@ status pipewire wireplumber`.
 
 ## API
 

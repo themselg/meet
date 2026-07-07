@@ -67,4 +67,4 @@ echo
 echo "Instalacion completa."
 echo " - Backend:  http://$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo " - Kiosko:   systemctl start meeting-room-kiosk   (o reinicia el equipo)"
-echo " - Modo VM:  editar VM_MODE en /etc/meeting-room/kiosk.env (1=VM, 0=hardware)"
+echo " - Si es una VM sin aceleracion 3D: poner VM_MODE=1 en /etc/meeting-room/kiosk.env"
