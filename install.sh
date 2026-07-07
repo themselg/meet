@@ -14,7 +14,8 @@ APP_DIR=/opt/meeting-room
 echo "==> Paquetes (EPEL: cage y chromium)"
 dnf install -y epel-release
 dnf install -y cage chromium python3 python3-pip pipewire wireplumber \
-  pipewire-pulseaudio xdg-desktop-portal curl
+  pipewire-pulseaudio xdg-desktop-portal curl \
+  mesa-dri-drivers mesa-libEGL mesa-libgbm libinput
 
 echo "==> Usuarios"
 id -u meeting-room &>/dev/null || \

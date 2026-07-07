@@ -27,7 +27,9 @@ FLAGS=(
 )
 
 if [ "${VM_MODE:-0}" = "1" ]; then
-  # VM sin aceleracion 3D: render por software en cage y chromium
+  # VM sin aceleracion 3D: compositor en software puro (pixman, sin EGL)
+  # y chromium sin GPU. Evita segfaults de wlroots cuando GL no es usable.
+  export WLR_RENDERER="${WLR_RENDERER:-pixman}"
   export WLR_RENDERER_ALLOW_SOFTWARE=1
   export LIBGL_ALWAYS_SOFTWARE=1
   FLAGS+=(--disable-gpu)
