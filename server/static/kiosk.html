@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sala de Reuniones</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: radial-gradient(120% 120% at 20% 0%, #1b2a4a 0%, #0b1220 55%, #060a14 100%);
+    color: #e8edf7;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; gap: 2.2rem;
+    cursor: none; user-select: none;
+  }
+  .clock { font-size: 7vw; font-weight: 200; letter-spacing: 0.04em; color: #f4f7ff; }
+  .date { font-size: 1.6vw; color: #8ea3c8; text-transform: capitalize; margin-top: 0.4rem; }
+  h1 { font-size: 3.4vw; font-weight: 600; }
+  .connect {
+    font-size: 1.7vw; color: #aebcd9;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 1rem; padding: 1.1rem 2.2rem;
+  }
+  .connect strong { color: #7fd4a8; font-weight: 600; }
+  .status { position: fixed; bottom: 1.4rem; right: 1.8rem; font-size: 1vw; color: #66759a; display: flex; align-items: center; gap: 0.5rem; }
+  .dot { width: 0.7em; height: 0.7em; border-radius: 50%; background: #e05b5b; }
+  .dot.ok { background: #4fc57f; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="clock" id="clock">--:--</div>
+    <div class="date" id="date"></div>
+  </div>
+  <h1>Sala de Reuniones</h1>
+  <div class="connect" id="connect">Iniciando…</div>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">conectando</span></div>
+
+<script>
+  function tick() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('date').textContent =
+      now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+  tick();
+  setInterval(tick, 5000);
+
+  async function loadStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      document.getElementById('connect').innerHTML = data.display_url
+        ? `Para enviar una reunión, abre <strong>${data.display_url}</strong> desde tu computadora`
+        : 'Conecta el dispositivo a la red para recibir reuniones';
+    } catch (_) { /* se reintenta abajo */ }
+  }
+  loadStatus();
+  setInterval(loadStatus, 30000);
+
+  const dot = document.getElementById('dot');
+  const statusText = document.getElementById('statusText');
+  const es = new EventSource('/api/events');
+  es.onopen = () => { dot.classList.add('ok'); statusText.textContent = 'en línea'; };
+  es.onerror = () => { dot.classList.remove('ok'); statusText.textContent = 'reconectando'; };
+  es.addEventListener('meeting', (e) => {
+    const { url } = JSON.parse(e.data);
+    window.location.href = url;
+  });
+  // En producción el servicio del kiosko se reinicia; esto cubre el modo desarrollo.
+  es.addEventListener('end', () => window.location.reload());
+</script>
+</body>
+</html>

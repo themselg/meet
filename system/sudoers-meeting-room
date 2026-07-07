@@ -1,0 +1,2 @@
+# Permite al backend reiniciar UNICAMENTE el servicio del kiosko (boton "Terminar reunion")
+meeting-room ALL=(root) NOPASSWD: /usr/bin/systemctl restart meeting-room-kiosk.service

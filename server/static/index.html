@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sala de Reuniones — Control</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #0b1220; color: #e8edf7;
+    min-height: 100vh; display: flex; justify-content: center;
+    padding: 3rem 1.2rem;
+  }
+  main { width: 100%; max-width: 34rem; display: flex; flex-direction: column; gap: 1.4rem; }
+  h1 { font-size: 1.5rem; font-weight: 600; }
+  h1 small { display: block; font-size: 0.85rem; font-weight: 400; color: #8ea3c8; margin-top: 0.3rem; }
+  .card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 0.9rem; padding: 1.3rem;
+  }
+  .state { display: flex; align-items: center; gap: 0.6rem; font-size: 1.05rem; }
+  .dot { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #4fc57f; flex-shrink: 0; }
+  .dot.busy { background: #e6a23c; }
+  .state .url { font-size: 0.8rem; color: #8ea3c8; word-break: break-all; margin-top: 0.4rem; }
+  form { display: flex; flex-direction: column; gap: 0.8rem; }
+  label { font-size: 0.9rem; color: #aebcd9; }
+  input[type=url] {
+    width: 100%; padding: 0.8rem 1rem; font-size: 1rem;
+    background: #060a14; color: #e8edf7;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 0.6rem;
+  }
+  input[type=url]:focus { outline: none; border-color: #5b8def; }
+  button {
+    padding: 0.8rem 1rem; font-size: 1rem; font-weight: 600;
+    border: none; border-radius: 0.6rem; cursor: pointer;
+    background: #5b8def; color: #fff;
+  }
+  button:hover { background: #4a7de0; }
+  button.danger { background: #b8433f; }
+  button.danger:hover { background: #a53531; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .msg { font-size: 0.9rem; padding: 0.7rem 1rem; border-radius: 0.6rem; display: none; }
+  .msg.ok { display: block; background: rgba(79,197,127,0.12); color: #7fd4a8; }
+  .msg.err { display: block; background: rgba(224,91,91,0.12); color: #ef9a9a; }
+  .services { font-size: 0.8rem; color: #66759a; line-height: 1.6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sala de Reuniones<small>Envía una reunión a la pantalla de la sala</small></h1>
+
+  <div class="card">
+    <div class="state">
+      <span class="dot" id="dot"></span>
+      <div>
+        <div id="stateText">Consultando estado…</div>
+        <div class="url" id="stateUrl"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <form id="form">
+      <label for="url">Enlace de la reunión (Teams, Zoom, Meet, Webex, Jitsi)</label>
+      <input type="url" id="url" placeholder="https://meet.google.com/abc-defg-hij" required autofocus>
+      <button type="submit" id="sendBtn">Abrir en la sala</button>
+    </form>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <button class="danger" id="endBtn" style="display:none">Terminar reunión</button>
+
+  <p class="services" id="services"></p>
+</main>
+
+<script>
+  const dot = document.getElementById('dot');
+  const stateText = document.getElementById('stateText');
+  const stateUrl = document.getElementById('stateUrl');
+  const endBtn = document.getElementById('endBtn');
+  const msg = document.getElementById('msg');
+
+  function showMsg(text, ok) {
+    msg.textContent = text;
+    msg.className = 'msg ' + (ok ? 'ok' : 'err');
+  }
+
+  function elapsed(since) {
+    const mins = Math.max(0, Math.floor((Date.now() / 1000 - since) / 60));
+    if (mins < 1) return 'hace un momento';
+    if (mins < 60) return `hace ${mins} min`;
+    return `hace ${Math.floor(mins / 60)} h ${mins % 60} min`;
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      if (data.state === 'meeting') {
+        dot.classList.add('busy');
+        stateText.textContent = `En reunión (${elapsed(data.since)})`;
+        stateUrl.textContent = data.url;
+        endBtn.style.display = 'block';
+      } else {
+        dot.classList.remove('busy');
+        stateText.textContent = 'Sala disponible';
+        stateUrl.textContent = '';
+        endBtn.style.display = 'none';
+      }
+      document.getElementById('services').textContent =
+        'Servicios permitidos: ' + data.allowed_domains.join(', ');
+    } catch (_) {
+      stateText.textContent = 'Sin conexión con la sala';
+    }
+  }
+  refresh();
+  setInterval(refresh, 3000);
+
+  document.getElementById('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/meeting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: document.getElementById('url').value }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMsg('Reunión enviada a la sala ✓', true);
+        document.getElementById('url').value = '';
+      } else {
+        showMsg(data.detail || 'URL rechazada', false);
+      }
+    } catch (_) {
+      showMsg('No se pudo contactar a la sala', false);
+    } finally {
+      btn.disabled = false;
+      refresh();
+    }
+  });
+
+  endBtn.addEventListener('click', async () => {
+    if (!confirm('¿Terminar la reunión y regresar la sala a la pantalla de inicio?')) return;
+    endBtn.disabled = true;
+    try {
+      await fetch('/api/end', { method: 'POST' });
+      showMsg('Reunión terminada; la sala vuelve a la pantalla de inicio', true);
+    } catch (_) {
+      showMsg('No se pudo contactar a la sala', false);
+    } finally {
+      endBtn.disabled = false;
+      refresh();
+    }
+  });
+</script>
+</body>
+</html>

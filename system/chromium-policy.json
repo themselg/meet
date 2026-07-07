@@ -1,0 +1,38 @@
+{
+  "AudioCaptureAllowedUrls": [
+    "https://teams.microsoft.com",
+    "https://[*.]teams.microsoft.com",
+    "https://teams.live.com",
+    "https://[*.]teams.live.com",
+    "https://zoom.us",
+    "https://[*.]zoom.us",
+    "https://meet.google.com",
+    "https://webex.com",
+    "https://[*.]webex.com",
+    "https://meet.jit.si",
+    "https://[*.]meet.jit.si"
+  ],
+  "VideoCaptureAllowedUrls": [
+    "https://teams.microsoft.com",
+    "https://[*.]teams.microsoft.com",
+    "https://teams.live.com",
+    "https://[*.]teams.live.com",
+    "https://zoom.us",
+    "https://[*.]zoom.us",
+    "https://meet.google.com",
+    "https://webex.com",
+    "https://[*.]webex.com",
+    "https://meet.jit.si",
+    "https://[*.]meet.jit.si"
+  ],
+  "DefaultNotificationsSetting": 2,
+  "PasswordManagerEnabled": false,
+  "BrowserSignin": 0,
+  "TranslateEnabled": false,
+  "MetricsReportingEnabled": false,
+  "DefaultBrowserSettingEnabled": false,
+  "PromotionalTabsEnabled": false,
+  "BackgroundModeEnabled": false,
+  "AutofillAddressEnabled": false,
+  "AutofillCreditCardEnabled": false
+}

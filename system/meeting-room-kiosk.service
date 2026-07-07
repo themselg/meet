@@ -1,0 +1,26 @@
+[Unit]
+Description=Universal Meeting Room - kiosko (cage + chromium)
+After=systemd-user-sessions.service meeting-room-server.service
+Wants=meeting-room-server.service
+Conflicts=getty@tty1.service
+
+[Service]
+User=kiosk
+# PAMName=login: logind crea la sesion, XDG_RUNTIME_DIR y activa pipewire
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UtmpIdentifier=tty1
+UtmpMode=user
+EnvironmentFile=/etc/meeting-room/kiosk.env
+ExecStart=/opt/meeting-room/scripts/start-kiosk.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
