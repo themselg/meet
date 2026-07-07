@@ -47,4 +47,7 @@ if [ -n "${CHROMIUM_EXTRA_FLAGS:-}" ]; then
   FLAGS+=($CHROMIUM_EXTRA_FLAGS)
 fi
 
-exec cage -- "$CHROMIUM_BIN" "${FLAGS[@]}" "$KIOSK_URL"
+# kiosk-session.sh corre dentro de cage: levanta wayvnc (soporte remoto,
+# solo localhost) y ejecuta el navegador como proceso principal.
+SESSION="$(dirname "$0")/kiosk-session.sh"
+exec cage -- "$SESSION" "$CHROMIUM_BIN" "${FLAGS[@]}" "$KIOSK_URL"

@@ -15,7 +15,7 @@ echo "==> Paquetes (EPEL: cage y chromium)"
 dnf install -y epel-release
 dnf install -y cage chromium python3 python3-pip pipewire wireplumber \
   pipewire-pulseaudio xdg-desktop-portal curl \
-  mesa-dri-drivers mesa-libEGL mesa-libgbm libinput
+  mesa-dri-drivers mesa-libEGL mesa-libgbm libinput wayvnc
 
 echo "==> Usuarios"
 id -u meeting-room &>/dev/null || \
