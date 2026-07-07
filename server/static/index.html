@@ -9,10 +9,12 @@
   body {
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     background: #0b1220; color: #e8edf7;
-    min-height: 100vh; display: flex; justify-content: center;
-    padding: 3rem 1.2rem;
+    min-height: 100vh;
   }
-  main { width: 100%; max-width: 44rem; display: flex; flex-direction: column; gap: 1.4rem; }
+
+  /* ---- Vista de inicio (sala disponible) ---- */
+  #idleView { display: flex; justify-content: center; padding: 3rem 1.2rem; }
+  main { width: 100%; max-width: 34rem; display: flex; flex-direction: column; gap: 1.4rem; }
   h1 { font-size: 1.5rem; font-weight: 600; }
   h1 small { display: block; font-size: 0.85rem; font-weight: 400; color: #8ea3c8; margin-top: 0.3rem; }
   .card {
@@ -22,8 +24,6 @@
   }
   .state { display: flex; align-items: center; gap: 0.6rem; font-size: 1.05rem; }
   .dot { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #4fc57f; flex-shrink: 0; }
-  .dot.busy { background: #e6a23c; }
-  .state .url { font-size: 0.8rem; color: #8ea3c8; word-break: break-all; margin-top: 0.4rem; }
   form { display: flex; flex-direction: column; gap: 0.8rem; }
   label { font-size: 0.9rem; color: #aebcd9; }
   input[type=url] {
@@ -41,27 +41,64 @@
   button.danger { background: #b8433f; }
   button.danger:hover { background: #a53531; }
   button:disabled { opacity: 0.5; cursor: default; }
-  .msg { font-size: 0.9rem; padding: 0.7rem 1rem; border-radius: 0.6rem; display: none; }
+  .msg { font-size: 0.9rem; padding: 0.7rem 1rem; border-radius: 0.6rem; display: none; margin-top: 0.8rem; }
   .msg.ok { display: block; background: rgba(79,197,127,0.12); color: #7fd4a8; }
   .msg.err { display: block; background: rgba(224,91,91,0.12); color: #ef9a9a; }
   .services { font-size: 0.8rem; color: #66759a; line-height: 1.6; }
-  .screen-card { padding: 0.6rem; }
-  .screen-card h2 { font-size: 0.9rem; font-weight: 500; color: #aebcd9; margin: 0.3rem 0.5rem 0.6rem; }
-  #screen { width: 100%; aspect-ratio: 16 / 9; background: #060a14; border-radius: 0.5rem; overflow: hidden; }
-  .screen-note { font-size: 0.8rem; color: #66759a; margin: 0.5rem; }
+
+  /* ---- Vista de reunión (pantalla completa) ---- */
+  #meetingView {
+    position: fixed; inset: 0; z-index: 10;
+    display: none; flex-direction: column;
+    background: #060a14;
+  }
+  body.meeting #meetingView { display: flex; }
+  body.meeting #idleView { display: none; }
+  #meetingView header {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.55rem 1rem;
+    background: #0b1220; border-bottom: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+  }
+  #meetingView header .title { font-weight: 600; white-space: nowrap; }
+  #meetingView header .minfo {
+    flex: 1; min-width: 0;
+    font-size: 0.82rem; color: #8ea3c8;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #meetingView header button { padding: 0.5rem 1rem; font-size: 0.9rem; }
+  #screenWrap { position: relative; flex: 1; min-height: 0; }
+  #screen { position: absolute; inset: 0; }
+  #screenNote {
+    position: absolute; inset: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    color: #66759a; font-size: 0.95rem;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
+
+<div id="meetingView">
+  <header>
+    <span class="title">Sala de Reuniones</span>
+    <span class="minfo" id="meetingInfo"></span>
+    <button class="danger" id="endBtn">Terminar reunión</button>
+  </header>
+  <div id="screenWrap">
+    <div id="screen"></div>
+    <div id="screenNote">Conectando con la pantalla de la sala…</div>
+  </div>
+</div>
+
+<div id="idleView">
 <main>
   <h1>Sala de Reuniones<small>Envía una reunión a la pantalla de la sala</small></h1>
 
   <div class="card">
     <div class="state">
-      <span class="dot" id="dot"></span>
-      <div>
-        <div id="stateText">Consultando estado…</div>
-        <div class="url" id="stateUrl"></div>
-      </div>
+      <span class="dot"></span>
+      <div id="stateText">Consultando estado…</div>
     </div>
   </div>
 
@@ -74,50 +111,18 @@
     <div class="msg" id="msg"></div>
   </div>
 
-  <div class="card screen-card" id="screenCard" style="display:none">
-    <h2>Pantalla de la sala</h2>
-    <div id="screen"></div>
-    <div class="screen-note" id="screenNote">Conectando con la pantalla…</div>
-  </div>
-
-  <button class="danger" id="endBtn" style="display:none">Terminar reunión</button>
-
   <p class="services" id="services"></p>
 </main>
+</div>
 
 <script type="module">
   import RFB from '/novnc/core/rfb.js';
 
-  const dot = document.getElementById('dot');
   const stateText = document.getElementById('stateText');
-  const stateUrl = document.getElementById('stateUrl');
+  const meetingInfo = document.getElementById('meetingInfo');
   const endBtn = document.getElementById('endBtn');
   const msg = document.getElementById('msg');
-  const screenCard = document.getElementById('screenCard');
   const screenNote = document.getElementById('screenNote');
-
-  let rfb = null;
-  function connectScreen() {
-    if (rfb) return;
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    rfb = new RFB(document.getElementById('screen'), `${proto}://${location.host}/api/vnc`);
-    rfb.scaleViewport = true;
-    rfb.background = '#060a14';
-    rfb.addEventListener('connect', () => { screenNote.style.display = 'none'; });
-    rfb.addEventListener('disconnect', () => {
-      rfb = null;
-      screenNote.style.display = 'block';
-      screenNote.textContent = 'Pantalla no disponible; reintentando…';
-    });
-  }
-  function disconnectScreen() {
-    if (rfb) {
-      try { rfb.disconnect(); } catch (_) { /* ya cerrado */ }
-      rfb = null;
-    }
-    screenNote.style.display = 'block';
-    screenNote.textContent = 'Conectando con la pantalla…';
-  }
 
   function showMsg(text, ok) {
     msg.textContent = text;
@@ -131,24 +136,41 @@
     return `hace ${Math.floor(mins / 60)} h ${mins % 60} min`;
   }
 
+  let rfb = null;
+  function connectScreen() {
+    if (rfb) return;
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    rfb = new RFB(document.getElementById('screen'), `${proto}://${location.host}/api/vnc`);
+    rfb.scaleViewport = true;
+    rfb.background = '#060a14';
+    rfb.addEventListener('connect', () => { screenNote.style.display = 'none'; });
+    rfb.addEventListener('disconnect', () => {
+      rfb = null;
+      screenNote.style.display = 'flex';
+      screenNote.textContent = 'Pantalla no disponible; reintentando…';
+    });
+  }
+  function disconnectScreen() {
+    if (rfb) {
+      try { rfb.disconnect(); } catch (_) { /* ya cerrado */ }
+      rfb = null;
+    }
+    screenNote.style.display = 'flex';
+    screenNote.textContent = 'Conectando con la pantalla de la sala…';
+  }
+
   async function refresh() {
     try {
       const res = await fetch('/api/status');
       const data = await res.json();
       if (data.state === 'meeting') {
-        dot.classList.add('busy');
-        stateText.textContent = `En reunión (${elapsed(data.since)})`;
-        stateUrl.textContent = data.url;
-        endBtn.style.display = 'block';
-        screenCard.style.display = 'block';
+        meetingInfo.textContent = `En reunión (${elapsed(data.since)}) — ${data.url}`;
+        document.body.classList.add('meeting');
         connectScreen();
       } else {
-        dot.classList.remove('busy');
-        stateText.textContent = 'Sala disponible';
-        stateUrl.textContent = '';
-        endBtn.style.display = 'none';
-        screenCard.style.display = 'none';
+        document.body.classList.remove('meeting');
         disconnectScreen();
+        stateText.textContent = 'Sala disponible';
       }
       document.getElementById('services').textContent =
         'Servicios permitidos: ' + data.allowed_domains.join(', ');
@@ -171,8 +193,8 @@
       });
       const data = await res.json();
       if (res.ok) {
-        showMsg('Reunión enviada a la sala ✓', true);
         document.getElementById('url').value = '';
+        refresh();
       } else {
         showMsg(data.detail || 'URL rechazada', false);
       }
@@ -180,7 +202,6 @@
       showMsg('No se pudo contactar a la sala', false);
     } finally {
       btn.disabled = false;
-      refresh();
     }
   });
 
