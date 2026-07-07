@@ -66,10 +66,19 @@ else
       *)                  DISPLAY_URL="https://$DISPLAY_INPUT" ;;
     esac
   fi
+  ROOM_NAME=""
+  if [ -t 0 ]; then
+    read -rp "Nombre del equipo al entrar a reuniones (ej. Oficina IAAN, vacio = ninguno): " ROOM_NAME
+  fi
   cat > /etc/meeting-room/server.env <<EOF
 # Direccion que muestra la pantalla de inicio del kiosko.
 # Vacio = usar la IP del dispositivo detectada automaticamente.
 MEETING_DISPLAY_URL=$DISPLAY_URL
+
+# Nombre con el que el equipo entra a reuniones, donde el servicio lo
+# acepte por URL (Jitsi, Zoom web). Teams/Meet lo toman de la cuenta
+# con la que se inicie sesion en el kiosko, no de esta variable.
+MEETING_ROOM_NAME=$ROOM_NAME
 EOF
 fi
 

@@ -107,6 +107,24 @@ En hardware real, al estrenar el equipo:
 Dominios permitidos: `teams.microsoft.com`, `teams.live.com`, `zoom.us`,
 `app.zoom.us`, `meet.google.com`, `webex.com`, `meet.jit.si` (y sus subdominios).
 
+## Entrar silenciado y con nombre de sala
+
+Tras validar, el backend ajusta la URL según lo que cada servicio soporta
+(`prepare_meeting_url` en `server/main.py`; el nombre sale de `MEETING_ROOM_NAME`
+en `/etc/meeting-room/server.env`):
+
+| Servicio | Cámara/mic apagados | Nombre de sala |
+|---|---|---|
+| Jitsi | ✅ por URL | ✅ por URL |
+| Zoom | ❌ (sin parámetro) | ✅ `uname` (además se reescribe `/j/<id>` → cliente web `/wc/join/<id>`, evitando la página "abre la app") |
+| Teams / Meet / Webex | ❌ | ❌ |
+
+Teams y Meet no aceptan nada por URL en el pre-join anónimo: el nombre y el
+estado de cámara/mic se fijan en su pantalla previa (requiere teclado/mouse en
+la sala), o iniciando sesión una sola vez en el Chromium del kiosko con una
+cuenta llamada como la sala — el perfil persiste entre reuniones y ambos toman
+el nombre de la cuenta. Automatizar ese pre-join vía extensión queda en fase 2.
+
 ## Pendiente (fase 2)
 
 - Confirmación en pantalla / PIN antes de abrir la reunión.

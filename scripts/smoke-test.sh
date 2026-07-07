@@ -9,6 +9,7 @@ fi
 .venv/bin/pip install -q -r server/requirements.txt
 
 PORT=8123
+export MEETING_ROOM_NAME="Sala Test"
 (cd server && exec ../.venv/bin/uvicorn main:app --host 127.0.0.1 --port $PORT --log-level warning) &
 PID=$!
 trap 'kill $PID 2>/dev/null || true' EXIT
@@ -42,6 +43,29 @@ check "rechazo: dominio malicioso"         400 -X POST -H "$json" -d '{"url":"ht
 check "rechazo: http sin tls"              400 -X POST -H "$json" -d '{"url":"http://meet.google.com/abc"}' "localhost:$PORT/api/meeting"
 check "rechazo: dominio no listado"        400 -X POST -H "$json" -d '{"url":"https://example.com/reunion"}' "localhost:$PORT/api/meeting"
 check "rechazo: sin URL"                   422 -X POST -H "$json" -d '{}' "localhost:$PORT/api/meeting"
+
+# Transformacion de URLs: mute/nombre en jitsi, cliente web + nombre en zoom
+body=$(curl -s -X POST -H "$json" -d '{"url":"https://meet.jit.si/prueba-sala"}' "localhost:$PORT/api/meeting")
+if echo "$body" | grep -q 'startWithAudioMuted=true' && echo "$body" | grep -q 'displayName'; then
+  echo "OK   jitsi sale con mute y nombre de sala"
+else
+  echo "FAIL jitsi sin transformar: $body"
+  fail=1
+fi
+body=$(curl -s -X POST -H "$json" -d '{"url":"https://us05web.zoom.us/j/123456789?pwd=abc"}' "localhost:$PORT/api/meeting")
+if echo "$body" | grep -q '/wc/join/123456789' && echo "$body" | grep -q 'uname=' && echo "$body" | grep -q 'pwd=abc'; then
+  echo "OK   zoom reescrito a cliente web con nombre (conserva pwd)"
+else
+  echo "FAIL zoom sin transformar: $body"
+  fail=1
+fi
+body=$(curl -s -X POST -H "$json" -d '{"url":"https://teams.microsoft.com/l/meetup-join/xyz"}' "localhost:$PORT/api/meeting")
+if echo "$body" | grep -q '"url":"https://teams.microsoft.com/l/meetup-join/xyz"'; then
+  echo "OK   teams pasa sin cambios"
+else
+  echo "FAIL teams alterado: $body"
+  fail=1
+fi
 
 # SSE: con reunion activa, un cliente nuevo debe recibir el evento de inmediato
 sse=$(timeout 3 curl -sN "localhost:$PORT/api/events" | head -n 2 | tr -d '\r' || true)

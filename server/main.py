@@ -10,11 +10,12 @@ Servidor FastAPI que:
 import asyncio
 import json
 import os
+import re
 import socket
 import subprocess
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
@@ -39,6 +40,10 @@ SSE_KEEPALIVE_SECONDS = 15
 # Direccion fija a mostrar en la pantalla del kiosko (p. ej. https://meet.iaan.mx).
 # Vacia = detectar la IP del dispositivo. La define /etc/meeting-room/server.env.
 DISPLAY_URL_OVERRIDE = os.environ.get("MEETING_DISPLAY_URL", "").strip() or None
+
+# Nombre con el que el equipo entra a las reuniones (p. ej. "Oficina IAAN").
+# Solo aplica en servicios que lo aceptan por URL (Jitsi, Zoom web).
+ROOM_NAME = os.environ.get("MEETING_ROOM_NAME", "").strip() or None
 
 app = FastAPI(title="Universal Meeting Room", docs_url=None, redoc_url=None)
 
@@ -91,6 +96,42 @@ def validate_meeting_url(raw: str) -> str:
         if host == domain or host.endswith("." + domain):
             return raw
     raise ValueError(f"Dominio no permitido: {host}")
+
+
+def prepare_meeting_url(url: str) -> str:
+    """Ajusta la URL ya validada segun el servicio: entrar silenciado y con el
+    nombre de la sala donde el servicio lo permita por URL.
+
+    - Jitsi: mute de camara/microfono y nombre via fragmento #config/userInfo.
+    - Zoom: /j/<id> se reescribe al cliente web /wc/join/<id> (evita la pagina
+      "abre la app de Zoom", inutil en un kiosko) y prellena el nombre (uname).
+    - Teams / Meet / Webex: sin parametros soportados; se devuelve sin cambios.
+    """
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+
+    if host == "meet.jit.si" or host.endswith(".meet.jit.si"):
+        extras = [
+            "config.startWithAudioMuted=true",
+            "config.startWithVideoMuted=true",
+        ]
+        if ROOM_NAME:
+            extras.append("userInfo.displayName=" + quote(f'"{ROOM_NAME}"'))
+        fragment = parts.fragment
+        fragment = (fragment + "&" if fragment else "") + "&".join(extras)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, fragment))
+
+    if host == "zoom.us" or host.endswith(".zoom.us"):
+        match = re.fullmatch(r"/j/(\d+)", parts.path)
+        if match:
+            query = parts.query
+            if ROOM_NAME:
+                query = (query + "&" if query else "") + "uname=" + quote(ROOM_NAME)
+            return urlunsplit(
+                (parts.scheme, parts.netloc, f"/wc/join/{match.group(1)}", query, parts.fragment)
+            )
+
+    return url
 
 
 def sse_event(name: str, data: dict) -> str:
@@ -154,7 +195,7 @@ async def status(request: Request) -> dict:
 @app.post("/api/meeting")
 async def create_meeting(req: MeetingRequest) -> dict:
     try:
-        url = validate_meeting_url(req.url)
+        url = prepare_meeting_url(validate_meeting_url(req.url))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     room.set_meeting(url)
