@@ -44,10 +44,19 @@ if [ -f "$UPDATE_ENV" ]; then
   # shellcheck disable=SC1090
   source "$UPDATE_ENV"
 fi
-REPO_DIR="${MEETING_ROOM_REPO_DIR:-$SCRIPT_DIR}"
 
-if [ ! -d "$REPO_DIR/.git" ]; then
-  echo "No encuentro un repo git en $REPO_DIR" >&2
+REPO_DIR=""
+for candidate in "${MEETING_ROOM_REPO_DIR:-}" "$SCRIPT_DIR" /home/meet/meet /home/*/meet /home/*/meeting-room /root/meet; do
+  [ -n "$candidate" ] || continue
+  if [ -d "$candidate/.git" ]; then
+    REPO_DIR="$candidate"
+    break
+  fi
+done
+
+if [ -z "$REPO_DIR" ]; then
+  echo "No encuentro un repo git para actualizar." >&2
+  echo "Revise candidatos: ${MEETING_ROOM_REPO_DIR:-<sin update.env>}, $SCRIPT_DIR, /home/meet/meet, /home/*/meet" >&2
   echo "Define MEETING_ROOM_REPO_DIR en $UPDATE_ENV" >&2
   exit 1
 fi
