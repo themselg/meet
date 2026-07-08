@@ -41,6 +41,8 @@ WALLPAPER_MAX_BYTES = 8 * 1024 * 1024
 
 WALLPAPER_PRESETS = ("oceano", "bosque", "lavanda", "atardecer")
 DEFAULT_WALLPAPER = "bosque"
+CLOCK_STYLES = ("soft", "minimal", "split", "panel")
+DEFAULT_CLOCK_STYLE = "soft"
 
 # Restriccion opcional de dominios (separados por coma) via
 # MEETING_ALLOWED_DOMAINS en /etc/meeting-room/server.env.
@@ -114,7 +116,8 @@ class MeetingRequest(BaseModel):
 
 
 class SettingsRequest(BaseModel):
-    wallpaper: str
+    wallpaper: str | None = None
+    clock_style: str | None = None
     pin: str | None = None
 
 
@@ -131,16 +134,25 @@ def save_settings(data: dict) -> None:
 
 
 def wallpaper_state() -> dict:
-    """Wallpaper activo (preset o 'custom') + version para cache-bust."""
+    """Apariencia activa del kiosko + version de wallpaper para cache-bust."""
     settings = load_settings()
     name = settings.get("wallpaper", DEFAULT_WALLPAPER)
     if name == "custom" and not WALLPAPER_FILE.exists():
         name = DEFAULT_WALLPAPER
     if name not in WALLPAPER_PRESETS + ("custom",):
         name = DEFAULT_WALLPAPER
+    clock_style = settings.get("clock_style", DEFAULT_CLOCK_STYLE)
+    if clock_style not in CLOCK_STYLES:
+        clock_style = DEFAULT_CLOCK_STYLE
     has_custom = WALLPAPER_FILE.exists()
     version = int(WALLPAPER_FILE.stat().st_mtime) if has_custom else None
-    return {"wallpaper": name, "wallpaper_version": version, "wallpaper_has_custom": has_custom}
+    return {
+        "wallpaper": name,
+        "wallpaper_version": version,
+        "wallpaper_has_custom": has_custom,
+        "clock_style": clock_style,
+        "clock_styles": CLOCK_STYLES,
+    }
 
 
 def image_mime(data: bytes) -> str | None:
@@ -337,13 +349,20 @@ async def status(request: Request) -> dict:
 @app.post("/api/settings")
 async def update_settings(req: SettingsRequest) -> dict:
     require_kiosk_pin(req.pin)
-    name = req.wallpaper
-    if name not in WALLPAPER_PRESETS + ("custom",):
-        raise HTTPException(status_code=400, detail=f"Wallpaper desconocido: {name}")
-    if name == "custom" and not WALLPAPER_FILE.exists():
-        raise HTTPException(status_code=400, detail="No hay imagen subida")
+    if req.wallpaper is None and req.clock_style is None:
+        raise HTTPException(status_code=400, detail="No hay cambios de configuración")
     settings = load_settings()
-    settings["wallpaper"] = name
+    if req.wallpaper is not None:
+        name = req.wallpaper
+        if name not in WALLPAPER_PRESETS + ("custom",):
+            raise HTTPException(status_code=400, detail=f"Wallpaper desconocido: {name}")
+        if name == "custom" and not WALLPAPER_FILE.exists():
+            raise HTTPException(status_code=400, detail="No hay imagen subida")
+        settings["wallpaper"] = name
+    if req.clock_style is not None:
+        if req.clock_style not in CLOCK_STYLES:
+            raise HTTPException(status_code=400, detail=f"Estilo de reloj desconocido: {req.clock_style}")
+        settings["clock_style"] = req.clock_style
     save_settings(settings)
     state = wallpaper_state()
     await room.broadcast(sse_event("settings", state))

@@ -113,6 +113,13 @@ else
 fi
 check "settings: preset invalido"          400 -X POST -H "$json" -d "{\"wallpaper\":\"neon\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
 check "settings: custom sin imagen"        400 -X POST -H "$json" -d "{\"wallpaper\":\"custom\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
+check "settings: reloj valido"             200 -X POST -H "$json" -d "{\"clock_style\":\"split\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
+if curl -s "localhost:$PORT/api/status" | grep -q '"clock_style":"split"'; then
+  echo "OK   status refleja estilo de reloj split"
+else
+  echo "FAIL status no refleja el estilo de reloj"; fail=1
+fi
+check "settings: reloj invalido"           400 -X POST -H "$json" -d "{\"clock_style\":\"gigante\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
 # PNG minimo de 1x1 para la subida
 printf '\x89PNG\r\n\x1a\n' > /tmp/mini.png
 head -c 100 /dev/zero >> /tmp/mini.png

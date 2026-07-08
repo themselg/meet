@@ -144,9 +144,9 @@ La UI implementa el diseño "Universal Meeting Appliance MD3":
   apunta a la dirección del panel. Si se pierde internet, la tarjeta cambia al
   estado "Sin conexión" con su píldora roja.
 - **Panel de control**: navigation rail con dos vistas — **Enviar** (campo MD3 +
-  botón "Enviar a la sala") y **Configuración** (wallpaper del kiosko, dispositivos
-  detectados de solo lectura y diagnóstico real: latencia, CPU, temperatura, uptime
-  vía `GET /api/diagnostics`).
+  botón "Enviar a la sala") y **Configuración** (wallpaper y estilo del reloj del
+  kiosko, dispositivos detectados de solo lectura y diagnóstico real: latencia,
+  CPU, temperatura, uptime vía `GET /api/diagnostics`).
 - **Sesión activa**: top app bar con "Terminar sesión" y el escritorio de la sala
   ocupando el resto (noVNC).
 

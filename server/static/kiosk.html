@@ -46,13 +46,83 @@
   #bg { position: fixed; inset: 0; background: var(--wall); background-size: cover; background-position: center; }
   #scrim { position: fixed; inset: 0; background: var(--scrim); }
 
-  .clock-block { position: fixed; top: 4.6vh; left: 3.4vw; }
-  #clock {
-    font-weight: 500; font-size: 11vw; line-height: 0.9;
-    letter-spacing: -0.03em; font-variation-settings: 'opsz' 144;
-    color: var(--onsurf);
+  .clock-block {
+    position: fixed; top: 4.8vh; left: 3.6vw;
+    max-width: min(62vw, 980px);
+    transition: background 0.2s ease, border 0.2s ease, padding 0.2s ease;
   }
-  #date { font-size: 2vw; color: var(--onsurfvar); margin-top: 1.2vh; text-transform: capitalize; }
+  #clock {
+    font-weight: 620; font-size: clamp(110px, 11vw, 215px); line-height: 0.86;
+    letter-spacing: 0; font-variation-settings: 'opsz' 144;
+    color: var(--onsurf);
+    text-shadow: 0 10px 34px rgba(0,0,0,0.32);
+  }
+  #date {
+    font-size: clamp(22px, 2vw, 40px); color: var(--onsurfvar); margin-top: 1.3vh;
+    text-transform: capitalize; font-weight: 460; line-height: 1.15;
+    text-shadow: 0 4px 16px rgba(0,0,0,0.28);
+  }
+
+  body[data-clock="soft"] .clock-block {
+    padding: clamp(28px, 3.2vw, 58px) clamp(34px, 4.2vw, 76px);
+    border-radius: 8px;
+    background: linear-gradient(145deg, rgba(8,20,35,0.44), rgba(8,20,35,0.18));
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 22px 70px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.12);
+    backdrop-filter: blur(10px) saturate(1.1);
+  }
+  body[data-clock="soft"] #clock { font-weight: 560; }
+  body[data-clock="soft"] #date {
+    color: color-mix(in srgb, var(--onsurf) 78%, var(--onsurfvar));
+    margin-top: clamp(16px, 1.5vh, 28px);
+  }
+
+  body[data-clock="minimal"] .clock-block { padding: 0; }
+  body[data-clock="minimal"] #clock {
+    font-weight: 420; font-size: clamp(116px, 12vw, 230px);
+    color: rgba(232,242,255,0.96);
+    text-shadow: 0 16px 52px rgba(0,0,0,0.48);
+  }
+  body[data-clock="minimal"] #date {
+    font-weight: 520; color: rgba(232,242,255,0.72);
+    margin-top: clamp(14px, 1.4vh, 26px);
+  }
+
+  body[data-clock="split"] .clock-block {
+    display: grid; grid-template-columns: auto 1fr; align-items: end;
+    gap: clamp(22px, 2.5vw, 46px); padding: 0;
+  }
+  body[data-clock="split"] .clock-block::before {
+    content: ''; width: 6px; height: clamp(118px, 11vw, 208px);
+    border-radius: 999px; background: var(--onsurf);
+    opacity: 0.82; box-shadow: 0 8px 26px rgba(0,0,0,0.28);
+  }
+  body[data-clock="split"] #clock {
+    grid-column: 2; font-weight: 720; font-size: clamp(106px, 10.8vw, 210px);
+  }
+  body[data-clock="split"] #date {
+    grid-column: 2; margin-top: clamp(8px, 1vh, 18px);
+    font-family: 'Roboto Mono', monospace; font-size: clamp(19px, 1.45vw, 30px);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+
+  body[data-clock="panel"] .clock-block {
+    display: inline-flex; align-items: center; gap: clamp(26px, 3vw, 54px);
+    padding: clamp(24px, 2.7vw, 48px) clamp(30px, 3.6vw, 66px);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 18px 58px rgba(0,0,0,0.28);
+    backdrop-filter: blur(12px);
+  }
+  body[data-clock="panel"] #clock {
+    font-family: 'Roboto Mono', monospace; font-weight: 540;
+    font-size: clamp(88px, 8.2vw, 158px); line-height: 1;
+  }
+  body[data-clock="panel"] #date {
+    max-width: 260px; margin-top: 0; font-weight: 620;
+    font-size: clamp(24px, 2.1vw, 42px); color: var(--onsurf);
+  }
 
   .pill {
     position: fixed; top: 4.6vh; right: 3.4vw;
@@ -116,7 +186,7 @@
   [hidden] { display: none !important; }
 </style>
 </head>
-<body data-scheme="bosque">
+<body data-scheme="bosque" data-clock="soft">
   <div id="bg"></div>
   <div id="scrim"></div>
 
@@ -184,9 +254,10 @@
     document.getElementById('displayUrl').textContent = publicUrl(url);
   }
 
-  function applyWallpaper(state) {
+  function applyAppearance(state) {
     const name = state.wallpaper || 'bosque';
     document.body.dataset.scheme = name;
+    document.body.dataset.clock = state.clock_style || 'soft';
     document.getElementById('bg').style.backgroundImage =
       name === 'custom' ? `url(/wallpaper?v=${state.wallpaper_version})` : '';
   }
@@ -203,7 +274,7 @@
       const data = await res.json();
       if (data.display_url) renderQr(data.display_url);
       if (data.pairing_pin) document.getElementById('pairingPin').textContent = data.pairing_pin;
-      applyWallpaper(data);
+      applyAppearance(data);
       setOffline(data.online === false);
     } catch (_) {
       setOffline(true); // sin backend tampoco hay reuniones
@@ -219,7 +290,7 @@
   });
   // En producción el servicio del kiosko se reinicia; esto cubre el modo desarrollo.
   es.addEventListener('end', () => window.location.reload());
-  es.addEventListener('settings', (e) => applyWallpaper(JSON.parse(e.data)));
+  es.addEventListener('settings', (e) => applyAppearance(JSON.parse(e.data)));
 </script>
 </body>
 </html>

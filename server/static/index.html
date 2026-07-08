@@ -132,6 +132,35 @@
     content: ''; position: absolute; inset: -6px; border-radius: 50%;
     border: 2px solid var(--p);
   }
+  .clock-options {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin-top: 18px;
+  }
+  .clock-option {
+    position: relative; border: 1px solid var(--divider); border-radius: 8px;
+    background: var(--card); color: var(--ontext); padding: 14px 14px 12px;
+    text-align: left; min-height: 96px;
+  }
+  .clock-option:hover { border-color: var(--outline); }
+  .clock-option.active { border-color: var(--p); box-shadow: inset 0 0 0 1px var(--p); }
+  .clock-option.active::after {
+    content: 'check'; position: absolute; top: 10px; right: 10px;
+    font-family: 'Material Symbols Rounded'; font-size: 18px; color: var(--p);
+    font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased;
+  }
+  .clock-preview {
+    display: block; color: var(--p); font-size: 30px; line-height: 1;
+    font-weight: 650; margin-bottom: 12px; letter-spacing: 0;
+  }
+  .clock-option[data-clock="minimal"] .clock-preview { font-weight: 420; font-size: 34px; }
+  .clock-option[data-clock="split"] .clock-preview {
+    border-left: 4px solid var(--p); padding-left: 10px; font-weight: 760;
+  }
+  .clock-option[data-clock="panel"] .clock-preview {
+    display: inline-block; font-family: 'Roboto Mono', monospace; font-size: 26px;
+    padding: 9px 11px; border-radius: 6px; background: var(--sc); color: var(--onsc);
+  }
+  .clock-name { display: block; font-weight: 650; font-size: 14px; }
   .wp-actions { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
   .btn-tonal {
     display: inline-flex; align-items: center; gap: 8px;
@@ -289,6 +318,31 @@
 
       <div class="card">
         <div class="card-head">
+          <div class="card-title"><span class="msr">schedule</span>Estilo del reloj</div>
+        </div>
+        <div class="clock-options" id="clockOptions">
+          <button class="clock-option" data-clock="soft">
+            <span class="clock-preview">22:29</span>
+            <span class="clock-name">Suave</span>
+          </button>
+          <button class="clock-option" data-clock="minimal">
+            <span class="clock-preview">22:29</span>
+            <span class="clock-name">Minimal</span>
+          </button>
+          <button class="clock-option" data-clock="split">
+            <span class="clock-preview">22:29</span>
+            <span class="clock-name">Barra</span>
+          </button>
+          <button class="clock-option" data-clock="panel">
+            <span class="clock-preview">22:29</span>
+            <span class="clock-name">Panel</span>
+          </button>
+        </div>
+        <div class="msg" id="clockMsg"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
           <div class="card-title"><span class="msr">tune</span>Audio y video</div>
         </div>
         <div class="ro-grid" id="devices"></div>
@@ -392,10 +446,13 @@
 
   /* ---------- wallpaper ---------- */
   let wpState = {};
-  function renderWallpaper(data) {
+  function renderAppearance(data) {
     wpState = data;
     document.querySelectorAll('.swatch').forEach((s) => {
       s.classList.toggle('active', s.dataset.wp === data.wallpaper);
+    });
+    document.querySelectorAll('.clock-option').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.clock === (data.clock_style || 'soft'));
     });
     const custom = document.querySelector('.swatch[data-wp="custom"]');
     custom.hidden = !data.wallpaper_has_custom;
@@ -413,8 +470,20 @@
       body: JSON.stringify({ wallpaper: swatch.dataset.wp, pin: rememberPin() }),
     });
     const data = await res.json();
-    if (res.ok) renderWallpaper(data);
+    if (res.ok) renderAppearance(data);
     else showMsg($('wpMsg'), data.detail || 'No se pudo cambiar', false);
+  });
+  $('clockOptions').addEventListener('click', async (e) => {
+    const option = e.target.closest('.clock-option');
+    if (!option) return;
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clock_style: option.dataset.clock, pin: rememberPin() }),
+    });
+    const data = await res.json();
+    if (res.ok) renderAppearance(data);
+    else showMsg($('clockMsg'), data.detail || 'No se pudo cambiar', false);
   });
   $('wpUpload').addEventListener('click', () => $('wpFile').click());
   $('wpFile').addEventListener('change', async () => {
@@ -429,7 +498,7 @@
       });
       const data = await res.json();
       if (res.ok) {
-        renderWallpaper(data);
+        renderAppearance(data);
         showMsg($('wpMsg'), 'Imagen aplicada al kiosko ✓', true);
       } else {
         showMsg($('wpMsg'), data.detail || 'No se pudo subir la imagen', false);
@@ -445,7 +514,7 @@
     const res = await fetch('/api/wallpaper', { method: 'DELETE', headers: pinHeader() });
     const data = await res.json();
     if (res.ok) {
-      renderWallpaper(data);
+      renderAppearance(data);
       showMsg($('wpMsg'), 'Imagen eliminada; el kiosko vuelve al gradiente', true);
     }
   });
@@ -492,7 +561,7 @@
     try {
       const res = await fetch('/api/status');
       const data = await res.json();
-      renderWallpaper(data);
+      renderAppearance(data);
       if (data.state === 'meeting') {
         $('elapsed').textContent = ` · ${elapsed(data.since)}`;
         $('meetingUrl').textContent = data.url;
