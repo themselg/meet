@@ -332,7 +332,16 @@ def restart_kiosk() -> str:
 def update_command() -> list[str]:
     script = str(UPDATE_SCRIPT)
     if script.startswith("/opt/"):
-        return ["sudo", "-n", script, "--from-panel"]
+        return [
+            "sudo",
+            "-n",
+            "/usr/bin/systemd-run",
+            "--wait",
+            "--collect",
+            "--unit=meeting-room-update",
+            script,
+            "--from-panel",
+        ]
     return [script, "--from-panel"]
 
 

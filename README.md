@@ -77,7 +77,8 @@ dependencias Python. Si cambió `server/requirements.txt`, usar
 `sudo ./update.sh --with-deps`. SELinux se omite por velocidad; si necesitas
 restaurar contextos, usar `sudo ./update.sh --restorecon`. El panel de
 Configuración también puede disparar esta actualización; mientras corre, el kiosko
-muestra el estado "Actualizando".
+muestra el estado "Actualizando". Desde el panel se lanza mediante `systemd-run`
+para que pueda acceder al repo fuente aunque el backend esté aislado por systemd.
 
 ### Verificación
 
