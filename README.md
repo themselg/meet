@@ -19,8 +19,8 @@ enlace de Teams / Zoom / Meet / Webex / Jitsi y la sala entra a la reunión.
 ```
 
 - El kiosko muestra `kiosk.html` (reloj + instrucciones) con una conexión SSE abierta.
-- `POST /api/meeting` valida la URL contra la allowlist (solo `https://` y dominios
-  de reunión conocidos, con verificación estricta de subdominios) y la empuja por SSE.
+- `POST /api/meeting` valida la URL (solo `https://`; opcionalmente restringida a
+  una lista de dominios) y la empuja por SSE.
 - El kiosko navega a la reunión. El botón **Terminar reunión** de la UI remota llama
   `POST /api/end`, que reinicia el servicio del kiosko vía una regla sudoers acotada
   a ese único comando — la sala vuelve limpia a la pantalla de inicio.
@@ -104,8 +104,13 @@ En hardware real, al estrenar el equipo:
 | `POST` | `/api/end` | Termina la reunión y reinicia el kiosko |
 | `GET` | `/api/events` | Stream SSE (eventos `meeting` y `end`) |
 
-Dominios permitidos: `teams.microsoft.com`, `teams.live.com`, `zoom.us`,
-`app.zoom.us`, `meet.google.com`, `webex.com`, `meet.jit.si` (y sus subdominios).
+Por defecto se acepta **cualquier enlace `https://`**. Para restringir a ciertos
+servicios, define `MEETING_ALLOWED_DOMAINS` en `/etc/meeting-room/server.env`
+(separados por coma; cubre también sus subdominios con verificación estricta):
+
+```
+MEETING_ALLOWED_DOMAINS=teams.microsoft.com,teams.live.com,zoom.us,meet.google.com,webex.com,meet.jit.si
+```
 
 ## Entrar silenciado y con nombre de sala
 

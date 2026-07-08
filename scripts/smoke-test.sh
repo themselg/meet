@@ -40,10 +40,23 @@ check "GET / (UI remota)"                  200 "localhost:$PORT/"
 check "GET /kiosk (pantalla sala)"         200 "localhost:$PORT/kiosk"
 check "URL valida (jitsi)"                 200 -X POST -H "$json" -d '{"url":"https://meet.jit.si/prueba-sala"}' "localhost:$PORT/api/meeting"
 check "URL valida (subdominio zoom)"       200 -X POST -H "$json" -d '{"url":"https://us05web.zoom.us/j/123?pwd=x"}' "localhost:$PORT/api/meeting"
-check "rechazo: dominio malicioso"         400 -X POST -H "$json" -d '{"url":"https://zoom.us.evil.com/j/1"}' "localhost:$PORT/api/meeting"
+check "URL valida (dominio arbitrario)"    200 -X POST -H "$json" -d '{"url":"https://example.com/reunion"}' "localhost:$PORT/api/meeting"
 check "rechazo: http sin tls"              400 -X POST -H "$json" -d '{"url":"http://meet.google.com/abc"}' "localhost:$PORT/api/meeting"
-check "rechazo: dominio no listado"        400 -X POST -H "$json" -d '{"url":"https://example.com/reunion"}' "localhost:$PORT/api/meeting"
 check "rechazo: sin URL"                   422 -X POST -H "$json" -d '{}' "localhost:$PORT/api/meeting"
+
+# Con MEETING_ALLOWED_DOMAINS la restriccion opcional debe seguir funcionando
+PORT2=8124
+(cd server && MEETING_ALLOWED_DOMAINS="zoom.us" exec ../.venv/bin/uvicorn main:app \
+  --host 127.0.0.1 --port $PORT2 --log-level warning) &
+PID2=$!
+trap 'kill $PID $PID2 2>/dev/null || true' EXIT
+for _ in $(seq 1 50); do
+  curl -fsS "localhost:$PORT2/api/status" >/dev/null 2>&1 && break
+  sleep 0.2
+done
+check "allowlist: dominio permitido"       200 -X POST -H "$json" -d '{"url":"https://zoom.us/j/123"}' "localhost:$PORT2/api/meeting"
+check "allowlist: dominio no listado"      400 -X POST -H "$json" -d '{"url":"https://example.com/x"}' "localhost:$PORT2/api/meeting"
+check "allowlist: dominio malicioso"       400 -X POST -H "$json" -d '{"url":"https://zoom.us.evil.com/j/1"}' "localhost:$PORT2/api/meeting"
 
 # Transformacion de URLs: mute/nombre en jitsi, cliente web + nombre en zoom
 body=$(curl -s -X POST -H "$json" -d '{"url":"https://meet.jit.si/prueba-sala"}' "localhost:$PORT/api/meeting")

@@ -25,14 +25,14 @@ from pydantic import BaseModel
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+# Restriccion opcional de dominios (separados por coma) via
+# MEETING_ALLOWED_DOMAINS en /etc/meeting-room/server.env.
+# Vacio o "*" = se acepta cualquier enlace https.
+_domains = os.environ.get("MEETING_ALLOWED_DOMAINS", "").strip()
 ALLOWED_DOMAINS = (
-    "teams.microsoft.com",
-    "teams.live.com",
-    "zoom.us",
-    "app.zoom.us",
-    "meet.google.com",
-    "webex.com",
-    "meet.jit.si",
+    tuple(d.strip().lower() for d in _domains.split(",") if d.strip())
+    if _domains not in ("", "*")
+    else ()
 )
 
 KIOSK_SERVICE = "meeting-room-kiosk.service"
@@ -97,6 +97,8 @@ def validate_meeting_url(raw: str) -> str:
     host = (parts.hostname or "").lower()
     if not host:
         raise ValueError("La URL no tiene un dominio válido")
+    if not ALLOWED_DOMAINS:
+        return raw
     for domain in ALLOWED_DOMAINS:
         # Igualdad exacta o subdominio real (".zoom.us"); evita "zoom.us.evil.com"
         if host == domain or host.endswith("." + domain):

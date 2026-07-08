@@ -175,8 +175,9 @@
         disconnectScreen();
         stateText.textContent = 'Sala disponible';
       }
-      document.getElementById('services').textContent =
-        'Servicios permitidos: ' + data.allowed_domains.join(', ');
+      document.getElementById('services').textContent = data.allowed_domains.length
+        ? 'Servicios permitidos: ' + data.allowed_domains.join(', ')
+        : 'Se acepta cualquier enlace https';
     } catch (_) {
       stateText.textContent = 'Sin conexión con la sala';
     }

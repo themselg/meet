@@ -6,10 +6,20 @@ SERVER_URL="${SERVER_URL:-http://localhost}"
 KIOSK_URL="${KIOSK_URL:-$SERVER_URL/kiosk}"
 CHROMIUM_BIN="${CHROMIUM_BIN:-/usr/bin/chromium-browser}"
 
-# Cursor del compositor invisible: el control remoto usa el cursor local del
-# navegador (sin retraso) y la TV no muestra una flecha moviendose sola.
+# Cursor invisible: el control remoto usa el cursor local del navegador (sin
+# retraso) y la TV no muestra una flecha moviendose sola. Dos frentes, porque
+# chromium puede dibujar el cursor via compositor (cursor-shape) o por si mismo
+# (tema que lee de la config GTK).
 if [ "${KIOSK_HIDE_CURSOR:-1}" = "1" ] && [ -d /usr/share/icons/meeting-room-hidden ]; then
   export XCURSOR_THEME=meeting-room-hidden
+  export XCURSOR_SIZE=24
+  for gtkdir in gtk-3.0 gtk-4.0; do
+    mkdir -p "$HOME/.config/$gtkdir"
+    printf '[Settings]\ngtk-cursor-theme-name=meeting-room-hidden\n' \
+      > "$HOME/.config/$gtkdir/settings.ini"
+  done
+else
+  rm -f "$HOME/.config/gtk-3.0/settings.ini" "$HOME/.config/gtk-4.0/settings.ini"
 fi
 
 echo "Esperando al backend en $SERVER_URL ..."

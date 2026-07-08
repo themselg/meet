@@ -79,6 +79,11 @@ MEETING_DISPLAY_URL=$DISPLAY_URL
 # acepte por URL (Jitsi, Zoom web). Teams/Meet lo toman de la cuenta
 # con la que se inicie sesion en el kiosko, no de esta variable.
 MEETING_ROOM_NAME=$ROOM_NAME
+
+# Restringir a ciertos dominios (separados por coma), ej:
+#   MEETING_ALLOWED_DOMAINS=teams.microsoft.com,zoom.us,meet.google.com
+# Vacio = se acepta cualquier enlace https.
+MEETING_ALLOWED_DOMAINS=
 EOF
 fi
 
