@@ -164,6 +164,27 @@
   }
   .clock-name { display: block; font-weight: 650; font-size: 14px; }
   .wp-actions { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 18px;
+    padding: 14px 0; border-top: 1px solid var(--divider);
+  }
+  .setting-row:first-child { border-top: none; padding-top: 0; }
+  .setting-label { font-weight: 650; font-size: 14px; margin-bottom: 4px; }
+  .setting-sub { color: var(--onvar); font-size: 13px; line-height: 1.35; }
+  .switch {
+    width: 52px; height: 32px; border-radius: 999px; border: none;
+    background: var(--outline); padding: 3px; flex: 0 0 auto;
+  }
+  .switch::before {
+    content: ''; display: block; width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; transition: transform 0.14s ease;
+  }
+  .switch.active { background: var(--p); }
+  .switch.active::before { transform: translateX(20px); }
+  .inline-form {
+    display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; margin-top: 18px;
+  }
+  .inline-form .field { margin-bottom: 0; }
   .btn-tonal {
     display: inline-flex; align-items: center; gap: 8px;
     background: var(--sc); color: var(--onsc); border: none; border-radius: 100px;
@@ -280,9 +301,9 @@
     <!-- Vista Enviar -->
     <section id="view-send"><div>
       <h1>Enviar reunión a la sala</h1>
-      <p class="lede">Ingresa el PIN que aparece en la pantalla y pega el enlace a enviar.</p>
+      <p class="lede" id="sendLede">Ingresa el PIN que aparece en la pantalla y pega el enlace a enviar.</p>
       <form id="form">
-        <div class="field">
+        <div class="field" id="sendPinField">
           <span class="msr lead">info</span>
           <input id="pin" type="text" inputmode="numeric" required placeholder=" " autocomplete="one-time-code" maxlength="16">
           <label for="pin">PIN de la sala</label>
@@ -304,6 +325,22 @@
       <h1>Configuración</h1>
       <p class="lede">Apariencia del kiosko, dispositivos y estado del sistema.</p>
 
+      <div class="card" id="adminGate">
+        <div class="card-head">
+          <div class="card-title"><span class="msr">settings</span>Acceso de administración</div>
+        </div>
+        <form id="adminForm">
+          <div class="field">
+            <span class="msr lead">info</span>
+            <input id="adminPin" type="password" inputmode="numeric" required placeholder=" " autocomplete="current-password">
+            <label for="adminPin">PIN de administración</label>
+          </div>
+          <button type="submit" class="btn-tonal"><span class="msr">check</span>Entrar</button>
+        </form>
+        <div class="msg" id="adminMsg"></div>
+      </div>
+
+      <div id="adminContent" hidden>
       <div class="card">
         <div class="card-head">
           <div class="card-title"><span class="msr">wallpaper</span>Wallpaper del kiosko</div>
@@ -353,6 +390,28 @@
 
       <div class="card">
         <div class="card-head">
+          <div class="card-title"><span class="msr">settings</span>Seguridad</div>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">PIN para enviar</div>
+            <div class="setting-sub">Cuando está apagado, cualquier usuario de la LAN puede enviar contenido a la sala.</div>
+          </div>
+          <button class="switch active" id="sendPinToggle" type="button" aria-label="PIN para enviar"></button>
+        </div>
+        <form class="inline-form" id="adminPinForm">
+          <div class="field">
+            <span class="msr lead">info</span>
+            <input id="newAdminPin" type="password" inputmode="numeric" placeholder=" " autocomplete="new-password">
+            <label for="newAdminPin">Nuevo PIN de administración</label>
+          </div>
+          <button class="btn-tonal" type="submit"><span class="msr">check</span>Cambiar</button>
+        </form>
+        <div class="msg" id="securityMsg"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
           <div class="card-title"><span class="msr">tune</span>Audio y video</div>
         </div>
         <div class="ro-grid" id="devices"></div>
@@ -374,6 +433,7 @@
         </div>
         <div class="msg" id="updateMsg"></div>
       </div>
+      </div>
     </div></section>
   </main>
 </div>
@@ -383,7 +443,9 @@
 
   const $ = (id) => document.getElementById(id);
   const PIN_STORAGE_KEY = 'meeting-room-kiosk-pin';
+  const ADMIN_PIN_SESSION_KEY = 'meeting-room-admin-pin';
   const UPDATE_PENDING_KEY = 'meeting-room-update-started-at';
+  let sendPinRequired = true;
 
   const params = new URLSearchParams(window.location.search);
   const pinFromQr = params.get('pin');
@@ -407,7 +469,19 @@
   }
 
   function pinHeader() {
-    return { 'X-Kiosk-Pin': rememberPin() };
+    return sendPinRequired ? { 'X-Kiosk-Pin': rememberPin() } : {};
+  }
+
+  function currentAdminPin() {
+    return sessionStorage.getItem(ADMIN_PIN_SESSION_KEY) || '';
+  }
+
+  function adminHeader() {
+    return { 'X-Admin-Pin': currentAdminPin() };
+  }
+
+  function adminBody(data) {
+    return { ...data, admin_pin: currentAdminPin() };
   }
 
   function showMsg(el, text, ok) {
@@ -431,8 +505,38 @@
       $('view-send').hidden = view !== 'send';
       $('view-admin').hidden = view !== 'admin';
       adminVisible = view === 'admin';
-      if (adminVisible) loadDiagnostics();
+      if (adminVisible && currentAdminPin()) {
+        $('adminGate').hidden = true;
+        $('adminContent').hidden = false;
+        loadDiagnostics();
+      }
     });
+  });
+
+  $('adminForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_pin: $('adminPin').value.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        sessionStorage.setItem(ADMIN_PIN_SESSION_KEY, $('adminPin').value.trim());
+        $('adminPin').value = '';
+        $('adminGate').hidden = true;
+        $('adminContent').hidden = false;
+        $('adminMsg').className = 'msg';
+        $('adminMsg').textContent = '';
+        refresh();
+        loadDiagnostics();
+      } else {
+        showMsg($('adminMsg'), data.detail || 'PIN incorrecto', false);
+      }
+    } catch (_) {
+      showMsg($('adminMsg'), 'No se pudo contactar a la sala', false);
+    }
   });
 
   /* ---------- visor VNC ---------- */
@@ -440,7 +544,8 @@
   function connectScreen() {
     if (rfb) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    rfb = new RFB($('screen'), `${proto}://${location.host}/api/vnc?pin=${encodeURIComponent(rememberPin())}`);
+    const query = sendPinRequired ? `?pin=${encodeURIComponent(rememberPin())}` : '';
+    rfb = new RFB($('screen'), `${proto}://${location.host}/api/vnc${query}`);
     rfb.scaleViewport = true;
     rfb.background = '#0A0F0D';
     rfb.addEventListener('connect', () => { $('screenNote').style.display = 'none'; });
@@ -463,6 +568,13 @@
   let wpState = {};
   function renderAppearance(data) {
     wpState = data;
+    sendPinRequired = data.send_pin_required !== false;
+    $('sendPinField').hidden = !sendPinRequired;
+    $('pin').required = sendPinRequired;
+    $('sendLede').textContent = sendPinRequired
+      ? 'Ingresa el PIN que aparece en la pantalla y pega el enlace a enviar.'
+      : 'Pega el enlace a enviar.';
+    $('sendPinToggle').classList.toggle('active', sendPinRequired);
     document.querySelectorAll('.swatch').forEach((s) => {
       s.classList.toggle('active', s.dataset.wp === data.wallpaper);
     });
@@ -482,7 +594,7 @@
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallpaper: swatch.dataset.wp, pin: rememberPin() }),
+      body: JSON.stringify(adminBody({ wallpaper: swatch.dataset.wp })),
     });
     const data = await res.json();
     if (res.ok) renderAppearance(data);
@@ -494,7 +606,7 @@
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clock_style: option.dataset.clock, pin: rememberPin() }),
+      body: JSON.stringify(adminBody({ clock_style: option.dataset.clock })),
     });
     const data = await res.json();
     if (res.ok) renderAppearance(data);
@@ -508,7 +620,7 @@
     try {
       const res = await fetch('/api/wallpaper', {
         method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream', ...pinHeader() },
+        headers: { 'Content-Type': file.type || 'application/octet-stream', ...adminHeader() },
         body: file,
       });
       const data = await res.json();
@@ -526,7 +638,7 @@
     }
   });
   $('wpDelete').addEventListener('click', async () => {
-    const res = await fetch('/api/wallpaper', { method: 'DELETE', headers: pinHeader() });
+    const res = await fetch('/api/wallpaper', { method: 'DELETE', headers: adminHeader() });
     const data = await res.json();
     if (res.ok) {
       renderAppearance(data);
@@ -549,7 +661,13 @@
   }
   async function loadDiagnostics() {
     try {
-      const res = await fetch('/api/diagnostics');
+      const res = await fetch('/api/diagnostics', { headers: adminHeader() });
+      if (res.status === 403) {
+        sessionStorage.removeItem(ADMIN_PIN_SESSION_KEY);
+        $('adminGate').hidden = false;
+        $('adminContent').hidden = true;
+        return;
+      }
       const d = await res.json();
       $('dPing').textContent = d.ping_ms != null ? `${d.ping_ms} ms` : '—';
       $('dPingSub').textContent = d.ping_ms == null ? 'Sin internet'
@@ -569,14 +687,54 @@
       renderDevices(d.devices);
     } catch (_) { /* siguiente ciclo */ }
   }
-  setInterval(() => { if (adminVisible && !document.body.classList.contains('meeting')) loadDiagnostics(); }, 5000);
+  setInterval(() => {
+    if (adminVisible && currentAdminPin() && !document.body.classList.contains('meeting')) loadDiagnostics();
+  }, 5000);
+
+  $('sendPinToggle').addEventListener('click', async () => {
+    const next = !sendPinRequired;
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adminBody({ send_pin_required: next })),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      renderAppearance(data);
+      showMsg($('securityMsg'), next ? 'PIN de envío requerido' : 'PIN de envío desactivado', true);
+    } else {
+      showMsg($('securityMsg'), data.detail || 'No se pudo cambiar', false);
+    }
+  });
+
+  $('adminPinForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newPin = $('newAdminPin').value.trim();
+    if (!newPin) {
+      showMsg($('securityMsg'), 'Ingresa un PIN nuevo', false);
+      return;
+    }
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adminBody({ new_admin_pin: newPin })),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      sessionStorage.setItem(ADMIN_PIN_SESSION_KEY, newPin);
+      $('newAdminPin').value = '';
+      showMsg($('securityMsg'), 'PIN de administración actualizado', true);
+    } else {
+      showMsg($('securityMsg'), data.detail || 'No se pudo cambiar', false);
+    }
+  });
 
   $('updateBtn').addEventListener('click', async () => {
     if (!confirm('¿Actualizar la app ahora? La pantalla de la sala puede reiniciarse.')) return;
     $('updateBtn').disabled = true;
     showMsg($('updateMsg'), 'Actualización iniciada; la sala volverá en unos momentos', true);
     try {
-      const res = await fetch('/api/update', { method: 'POST', headers: pinHeader() });
+      const res = await fetch('/api/update', { method: 'POST', headers: adminHeader() });
       const data = await res.json();
       if (res.ok) {
         localStorage.setItem(UPDATE_PENDING_KEY, String(Date.now()));
@@ -648,7 +806,7 @@
       const res = await fetch('/api/meeting', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: $('url').value, pin: rememberPin() }),
+        body: JSON.stringify(sendPinRequired ? { url: $('url').value, pin: rememberPin() } : { url: $('url').value }),
       });
       const data = await res.json();
       if (res.ok) {

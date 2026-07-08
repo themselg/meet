@@ -41,11 +41,13 @@ check() {
 }
 
 json='Content-Type: application/json'
+ADMIN_PIN=123456
 check "GET /api/status"                    200 "localhost:$PORT/api/status"
 check "GET / (UI remota)"                  200 "localhost:$PORT/"
 check "GET /kiosk (pantalla sala)"         200 "localhost:$PORT/kiosk"
 check "rechazo: sin PIN"                   403 -X POST -H "$json" -d '{"url":"https://meet.jit.si/prueba-sala"}' "localhost:$PORT/api/meeting"
 check "update: rechazo sin PIN"            403 -X POST "localhost:$PORT/api/update"
+check "admin: PIN valido"                  200 -X POST -H "$json" -d "{\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/admin/verify"
 check "URL valida (jitsi)"                 200 -X POST -H "$json" -d "{\"url\":\"https://meet.jit.si/prueba-sala\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
 check "URL valida (subdominio zoom)"       200 -X POST -H "$json" -d "{\"url\":\"https://us05web.zoom.us/j/123?pwd=x\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
 check "URL valida (dominio arbitrario)"    200 -X POST -H "$json" -d "{\"url\":\"https://example.com/reunion\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
@@ -100,39 +102,42 @@ else
 fi
 
 # Settings y wallpaper (MD3): presets, imagen propia y diagnostico
-check "GET /api/diagnostics"               200 "localhost:$PORT/api/diagnostics"
-if curl -s "localhost:$PORT/api/diagnostics" | grep -q '"cpu_percent"'; then
+check "GET /api/diagnostics"               200 -H "X-Admin-Pin: $ADMIN_PIN" "localhost:$PORT/api/diagnostics"
+if curl -s -H "X-Admin-Pin: $ADMIN_PIN" "localhost:$PORT/api/diagnostics" | grep -q '"cpu_percent"'; then
   echo "OK   diagnostics trae cpu_percent"
 else
   echo "FAIL diagnostics sin campos"; fail=1
 fi
-check "settings: preset valido"            200 -X POST -H "$json" -d "{\"wallpaper\":\"lavanda\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
+check "settings: preset valido"            200 -X POST -H "$json" -d "{\"wallpaper\":\"lavanda\",\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/settings"
 if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"lavanda"'; then
   echo "OK   status refleja wallpaper lavanda"
 else
   echo "FAIL status no refleja el preset"; fail=1
 fi
-check "settings: preset invalido"          400 -X POST -H "$json" -d "{\"wallpaper\":\"neon\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
-check "settings: custom sin imagen"        400 -X POST -H "$json" -d "{\"wallpaper\":\"custom\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
-check "settings: reloj valido"             200 -X POST -H "$json" -d "{\"clock_style\":\"split\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
+check "settings: preset invalido"          400 -X POST -H "$json" -d "{\"wallpaper\":\"neon\",\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/settings"
+check "settings: custom sin imagen"        400 -X POST -H "$json" -d "{\"wallpaper\":\"custom\",\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/settings"
+check "settings: reloj valido"             200 -X POST -H "$json" -d "{\"clock_style\":\"split\",\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/settings"
 if curl -s "localhost:$PORT/api/status" | grep -q '"clock_style":"split"'; then
   echo "OK   status refleja estilo de reloj split"
 else
   echo "FAIL status no refleja el estilo de reloj"; fail=1
 fi
-check "settings: reloj invalido"           400 -X POST -H "$json" -d "{\"clock_style\":\"gigante\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
+check "settings: reloj invalido"           400 -X POST -H "$json" -d "{\"clock_style\":\"gigante\",\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/settings"
+check "settings: desactivar PIN envio"     200 -X POST -H "$json" -d "{\"send_pin_required\":false,\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/settings"
+check "URL valida sin PIN de envio"        200 -X POST -H "$json" -d '{"url":"https://meet.jit.si/sin-pin"}' "localhost:$PORT/api/meeting"
+check "settings: reactivar PIN envio"      200 -X POST -H "$json" -d "{\"send_pin_required\":true,\"admin_pin\":\"$ADMIN_PIN\"}" "localhost:$PORT/api/settings"
 # PNG minimo de 1x1 para la subida
 printf '\x89PNG\r\n\x1a\n' > /tmp/mini.png
 head -c 100 /dev/zero >> /tmp/mini.png
-check "wallpaper: subir PNG"               200 -X PUT --data-binary @/tmp/mini.png -H 'Content-Type: image/png' -H "X-Kiosk-Pin: $PIN" "localhost:$PORT/api/wallpaper"
+check "wallpaper: subir PNG"               200 -X PUT --data-binary @/tmp/mini.png -H 'Content-Type: image/png' -H "X-Admin-Pin: $ADMIN_PIN" "localhost:$PORT/api/wallpaper"
 check "wallpaper: servir imagen"           200 "localhost:$PORT/wallpaper"
 if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"custom"'; then
   echo "OK   status activa wallpaper custom tras subir"
 else
   echo "FAIL status no activo custom"; fail=1
 fi
-check "wallpaper: body no imagen"          400 -X PUT --data-binary 'hola' -H 'Content-Type: text/plain' -H "X-Kiosk-Pin: $PIN" "localhost:$PORT/api/wallpaper"
-check "wallpaper: eliminar"                200 -X DELETE -H "X-Kiosk-Pin: $PIN" "localhost:$PORT/api/wallpaper"
+check "wallpaper: body no imagen"          400 -X PUT --data-binary 'hola' -H 'Content-Type: text/plain' -H "X-Admin-Pin: $ADMIN_PIN" "localhost:$PORT/api/wallpaper"
+check "wallpaper: eliminar"                200 -X DELETE -H "X-Admin-Pin: $ADMIN_PIN" "localhost:$PORT/api/wallpaper"
 if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"bosque"'; then
   echo "OK   al eliminar vuelve al gradiente predeterminado"
 else

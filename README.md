@@ -106,13 +106,17 @@ En hardware real, al estrenar el equipo:
 | `GET` | `/` | UI remota |
 | `GET` | `/kiosk` | Pantalla del kiosko |
 | `GET` | `/api/status` | Estado de la sala, IP y dominios permitidos |
-| `POST` | `/api/meeting` | `{"url": "https://...", "pin": "123456"}` → valida y envía a la sala |
-| `POST` | `/api/end` | Termina la reunión y reinicia el kiosko; requiere `X-Kiosk-Pin` |
-| `POST` | `/api/update` | Lanza el instalador/actualizador; requiere `X-Kiosk-Pin` |
+| `POST` | `/api/admin/verify` | Valida el PIN de administración |
+| `POST` | `/api/meeting` | `{"url": "https://...", "pin": "123456"}` → valida y envía a la sala; el PIN puede desactivarse |
+| `POST` | `/api/end` | Termina la reunión y reinicia el kiosko; usa `X-Kiosk-Pin` solo si el PIN de envío está activo |
+| `POST` | `/api/update` | Lanza el instalador/actualizador; requiere `X-Admin-Pin` |
 | `GET` | `/api/events` | Stream SSE (eventos `meeting` y `end`) |
 
-El PIN se genera automáticamente al arrancar el backend, o puede fijarse con
-`MEETING_KIOSK_PIN` en `/etc/meeting-room/server.env`.
+El PIN de envío se genera automáticamente al arrancar el backend, o puede fijarse
+con `MEETING_KIOSK_PIN` en `/etc/meeting-room/server.env`. El PIN de
+administración protege Configuración; por defecto es `123456` y puede cambiarse
+desde el panel. También desde Configuración se puede desactivar el PIN de envío;
+cuando está apagado, el kiosko deja de mostrarlo y la vista Enviar deja de pedirlo.
 
 Por defecto se acepta **cualquier enlace `https://`**. Para restringir a ciertos
 servicios, define `MEETING_ALLOWED_DOMAINS` en `/etc/meeting-room/server.env`
@@ -150,8 +154,9 @@ La UI implementa el diseño "Universal Meeting Appliance MD3":
   estado "Sin conexión" con su píldora roja.
 - **Panel de control**: navigation rail con dos vistas — **Enviar** (campo MD3 +
   botón "Enviar a la sala") y **Configuración** (wallpaper y estilo del reloj del
-  kiosko, actualización desde panel, dispositivos detectados de solo lectura y
-  diagnóstico real: latencia, CPU, temperatura, uptime vía `GET /api/diagnostics`).
+  kiosko, seguridad de PIN, actualización desde panel, dispositivos detectados de
+  solo lectura y diagnóstico real: latencia, CPU, temperatura, uptime vía
+  `GET /api/diagnostics`).
 - **Sesión activa**: top app bar con "Terminar sesión" y el escritorio de la sala
   ocupando el resto (noVNC).
 

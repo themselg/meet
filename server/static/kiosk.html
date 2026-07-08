@@ -234,7 +234,7 @@
       <div class="divider"></div>
       <div class="visit">Visita</div>
       <div class="url" id="displayUrl">…</div>
-      <div class="pin-wrap">
+      <div class="pin-wrap" id="pairingPinBlock">
         <div class="pin-label">PIN de la sala</div>
         <div class="pin" id="pairingPin">------</div>
       </div>
@@ -309,6 +309,7 @@
       const res = await fetch('/api/status?kiosk=1');
       const data = await res.json();
       if (data.display_url) renderQr(data.display_url);
+      document.getElementById('pairingPinBlock').hidden = data.send_pin_required === false;
       if (data.pairing_pin) document.getElementById('pairingPin').textContent = data.pairing_pin;
       applyAppearance(data);
       setOffline(data.online === false);

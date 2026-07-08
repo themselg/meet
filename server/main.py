@@ -43,6 +43,8 @@ WALLPAPER_PRESETS = ("oceano", "bosque", "lavanda", "atardecer")
 DEFAULT_WALLPAPER = "bosque"
 CLOCK_STYLES = ("soft", "minimal", "split", "panel")
 DEFAULT_CLOCK_STYLE = "soft"
+DEFAULT_ADMIN_PIN = "123456"
+DEFAULT_SEND_PIN_REQUIRED = True
 
 # Restriccion opcional de dominios (separados por coma) via
 # MEETING_ALLOWED_DOMAINS en /etc/meeting-room/server.env.
@@ -123,9 +125,16 @@ class MeetingRequest(BaseModel):
     pin: str | None = None
 
 
+class AdminVerifyRequest(BaseModel):
+    admin_pin: str | None = None
+
+
 class SettingsRequest(BaseModel):
     wallpaper: str | None = None
     clock_style: str | None = None
+    send_pin_required: bool | None = None
+    new_admin_pin: str | None = None
+    admin_pin: str | None = None
     pin: str | None = None
 
 
@@ -139,6 +148,14 @@ def load_settings() -> dict:
 def save_settings(data: dict) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps(data))
+
+
+def send_pin_required() -> bool:
+    return bool(load_settings().get("send_pin_required", DEFAULT_SEND_PIN_REQUIRED))
+
+
+def admin_pin() -> str:
+    return str(load_settings().get("admin_pin") or DEFAULT_ADMIN_PIN)
 
 
 def wallpaper_state() -> dict:
@@ -160,6 +177,7 @@ def wallpaper_state() -> dict:
         "wallpaper_has_custom": has_custom,
         "clock_style": clock_style,
         "clock_styles": CLOCK_STYLES,
+        "send_pin_required": bool(settings.get("send_pin_required", DEFAULT_SEND_PIN_REQUIRED)),
     }
 
 
@@ -275,9 +293,16 @@ def get_local_ip() -> str | None:
             sock.close()
 
 
-def require_kiosk_pin(pin: str | None) -> None:
+def require_send_pin(pin: str | None) -> None:
+    if not send_pin_required():
+        return
     if not pin or not secrets.compare_digest(pin.strip(), KIOSK_PIN):
         raise HTTPException(status_code=403, detail="PIN incorrecto")
+
+
+def require_admin_pin(pin: str | None) -> None:
+    if not pin or not secrets.compare_digest(pin.strip(), admin_pin()):
+        raise HTTPException(status_code=403, detail="PIN de administración incorrecto")
 
 
 async def pin_from_request(request: Request) -> str | None:
@@ -285,6 +310,14 @@ async def pin_from_request(request: Request) -> str | None:
         request.headers.get("X-Kiosk-Pin")
         or request.query_params.get("pin")
         or request.query_params.get("kiosk_pin")
+    )
+
+
+async def admin_pin_from_request(request: Request) -> str | None:
+    return (
+        request.headers.get("X-Admin-Pin")
+        or request.query_params.get("admin_pin")
+        or request.query_params.get("adminPin")
     )
 
 
@@ -381,22 +414,34 @@ async def kiosk_ui() -> FileResponse:
 async def status(request: Request) -> dict:
     kiosk_view = request.query_params.get("kiosk") == "1" and is_loopback_request(request)
     ip = get_local_ip()
+    include_send_pin = kiosk_view and send_pin_required()
     return {
         **room.snapshot(),
         **wallpaper_state(),
         "ip": ip,
-        "display_url": display_url_for_request(request, include_pin=kiosk_view),
-        "pairing_pin": KIOSK_PIN if kiosk_view else None,
+        "display_url": display_url_for_request(request, include_pin=include_send_pin),
+        "pairing_pin": KIOSK_PIN if include_send_pin else None,
         "allowed_domains": ALLOWED_DOMAINS,
         "online": net_state["online"],
         "update": update_state,
     }
 
 
+@app.post("/api/admin/verify")
+async def verify_admin(req: AdminVerifyRequest) -> dict:
+    require_admin_pin(req.admin_pin)
+    return {"ok": True}
+
+
 @app.post("/api/settings")
 async def update_settings(req: SettingsRequest) -> dict:
-    require_kiosk_pin(req.pin)
-    if req.wallpaper is None and req.clock_style is None:
+    require_admin_pin(req.admin_pin)
+    if (
+        req.wallpaper is None
+        and req.clock_style is None
+        and req.send_pin_required is None
+        and req.new_admin_pin is None
+    ):
         raise HTTPException(status_code=400, detail="No hay cambios de configuración")
     settings = load_settings()
     if req.wallpaper is not None:
@@ -410,6 +455,15 @@ async def update_settings(req: SettingsRequest) -> dict:
         if req.clock_style not in CLOCK_STYLES:
             raise HTTPException(status_code=400, detail=f"Estilo de reloj desconocido: {req.clock_style}")
         settings["clock_style"] = req.clock_style
+    if req.send_pin_required is not None:
+        settings["send_pin_required"] = req.send_pin_required
+    if req.new_admin_pin is not None:
+        new_pin = req.new_admin_pin.strip()
+        if not new_pin:
+            raise HTTPException(status_code=400, detail="El PIN de administración no puede estar vacío")
+        if len(new_pin) > 64:
+            raise HTTPException(status_code=400, detail="El PIN de administración es demasiado largo")
+        settings["admin_pin"] = new_pin
     save_settings(settings)
     state = wallpaper_state()
     await room.broadcast(sse_event("settings", state))
@@ -418,7 +472,7 @@ async def update_settings(req: SettingsRequest) -> dict:
 
 @app.put("/api/wallpaper")
 async def upload_wallpaper(request: Request) -> dict:
-    require_kiosk_pin(await pin_from_request(request))
+    require_admin_pin(await admin_pin_from_request(request))
     data = await request.body()
     if len(data) > WALLPAPER_MAX_BYTES:
         raise HTTPException(status_code=413, detail="Imagen demasiado grande (máximo 8 MB)")
@@ -437,7 +491,7 @@ async def upload_wallpaper(request: Request) -> dict:
 
 @app.delete("/api/wallpaper")
 async def delete_wallpaper(request: Request) -> dict:
-    require_kiosk_pin(await pin_from_request(request))
+    require_admin_pin(await admin_pin_from_request(request))
     WALLPAPER_FILE.unlink(missing_ok=True)
     settings = load_settings()
     settings["wallpaper"] = DEFAULT_WALLPAPER
@@ -494,7 +548,8 @@ def _devices() -> dict:
 
 
 @app.get("/api/diagnostics")
-async def diagnostics() -> dict:
+async def diagnostics(request: Request) -> dict:
+    require_admin_pin(await admin_pin_from_request(request))
     idle1, total1 = _cpu_times()
     await asyncio.sleep(0.25)
     idle2, total2 = _cpu_times()
@@ -513,7 +568,7 @@ async def diagnostics() -> dict:
 
 @app.post("/api/meeting")
 async def create_meeting(req: MeetingRequest) -> dict:
-    require_kiosk_pin(req.pin)
+    require_send_pin(req.pin)
     try:
         url = prepare_meeting_url(validate_meeting_url(req.url))
     except ValueError as exc:
@@ -525,7 +580,7 @@ async def create_meeting(req: MeetingRequest) -> dict:
 
 @app.post("/api/end")
 async def end_meeting(request: Request) -> dict:
-    require_kiosk_pin(await pin_from_request(request))
+    require_send_pin(await pin_from_request(request))
     room.reset()
     await room.broadcast(sse_event("end", {}))
     return {"ok": True, "kiosk_restart": restart_kiosk()}
@@ -534,7 +589,7 @@ async def end_meeting(request: Request) -> dict:
 @app.post("/api/update")
 async def update_app(request: Request) -> dict:
     global update_task
-    require_kiosk_pin(await pin_from_request(request))
+    require_admin_pin(await admin_pin_from_request(request))
     if update_state["running"] or (update_task and not update_task.done()):
         return {"ok": True, "running": True}
     if not INSTALL_SCRIPT.exists():
@@ -550,7 +605,7 @@ async def vnc_proxy(ws: WebSocket) -> None:
     Es lo que hace websockify, pero integrado: noVNC en la pagina de control
     se conecta aqui y ve/controla la pantalla de la sala.
     """
-    if not secrets.compare_digest((ws.query_params.get("pin") or "").strip(), KIOSK_PIN):
+    if send_pin_required() and not secrets.compare_digest((ws.query_params.get("pin") or "").strip(), KIOSK_PIN):
         await ws.close(code=1008, reason="PIN incorrecto")
         return
 
