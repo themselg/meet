@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Instalador idempotente del appliance "Universal Meeting Room" en AlmaLinux 10.
-# Uso: sudo ./install.sh   (re-ejecutable tras un git pull para actualizar)
+# Uso: sudo ./install.sh   (re-ejecutable para instalar o actualizar)
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -10,6 +10,24 @@ fi
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR=/opt/meeting-room
+UPDATE_ENV=/etc/meeting-room/update.env
+
+if [ ! -d "$REPO_DIR/.git" ] && [ -f "$UPDATE_ENV" ]; then
+  MEETING_ROOM_REPO_DIR=""
+  # shellcheck disable=SC1090
+  source "$UPDATE_ENV"
+  if [ -n "${MEETING_ROOM_REPO_DIR:-}" ] &&
+     [ -d "$MEETING_ROOM_REPO_DIR/.git" ] &&
+     [ -x "$MEETING_ROOM_REPO_DIR/install.sh" ]; then
+    exec "$MEETING_ROOM_REPO_DIR/install.sh" "$@"
+  fi
+fi
+
+if [ -d "$REPO_DIR/.git" ]; then
+  echo "==> Actualizando repo en $REPO_DIR"
+  command -v git >/dev/null 2>&1 || { echo "Falta git para actualizar $REPO_DIR" >&2; exit 1; }
+  git -C "$REPO_DIR" -c safe.directory="$REPO_DIR" pull --ff-only
+fi
 
 echo "==> Paquetes (EPEL: cage y chromium)"
 if command -v cage >/dev/null 2>&1 && \
@@ -36,7 +54,8 @@ mkdir -p "$APP_DIR"
 cp -r "$REPO_DIR/server" "$APP_DIR/"
 cp -r "$REPO_DIR/scripts" "$APP_DIR/"
 chmod +x "$APP_DIR"/scripts/*.sh
-install -m 0755 "$REPO_DIR/update.sh" "$APP_DIR/update.sh"
+install -m 0755 "$REPO_DIR/install.sh" "$APP_DIR/install.sh"
+rm -f "$APP_DIR/update.sh"
 
 echo "==> Entorno virtual de Python"
 [ -d "$APP_DIR/venv" ] || python3 -m venv "$APP_DIR/venv"
@@ -48,7 +67,7 @@ mkdir -p /etc/meeting-room
 # kiosk.env se conserva si ya existe (guarda VM_MODE local)
 [ -f /etc/meeting-room/kiosk.env ] || cp "$REPO_DIR/system/kiosk.env" /etc/meeting-room/kiosk.env
 cat > /etc/meeting-room/update.env <<EOF
-# Repo fuente usado por /opt/meeting-room/update.sh para git pull.
+# Repo fuente usado por /opt/meeting-room/install.sh para git pull desde el panel.
 MEETING_ROOM_REPO_DIR=$REPO_DIR
 EOF
 
@@ -119,12 +138,13 @@ rm -rf /usr/share/icons/meeting-room-hidden  # ubicacion antigua
 
 echo "==> SELinux"
 command -v restorecon &>/dev/null && \
-  restorecon -R "$APP_DIR/server" "$APP_DIR/scripts" "$APP_DIR/update.sh" || true
+  restorecon -R "$APP_DIR/server" "$APP_DIR/scripts" "$APP_DIR/install.sh" || true
 
 systemctl restart meeting-room-server.service
+systemctl restart meeting-room-kiosk.service
 
 echo
 echo "Instalacion completa."
 echo " - Backend:  http://$(hostname -I 2>/dev/null | awk '{print $1}')"
-echo " - Kiosko:   systemctl start meeting-room-kiosk   (o reinicia el equipo)"
+echo " - Kiosko:   meeting-room-kiosk reiniciado"
 echo " - Si es una VM sin aceleracion 3D: poner VM_MODE=1 en /etc/meeting-room/kiosk.env"

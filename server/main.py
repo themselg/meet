@@ -73,11 +73,11 @@ ROOM_NAME = os.environ.get("MEETING_ROOM_NAME", "").strip() or None
 VNC_HOST = "127.0.0.1"
 VNC_PORT = int(os.environ.get("KIOSK_VNC_PORT", "5900"))
 
-# Script de actualizacion rapida. En produccion vive en /opt; en desarrollo cae
-# al repo actual para poder probarlo sin instalar.
-UPDATE_SCRIPT = Path(os.environ.get("MEETING_UPDATE_SCRIPT", "/opt/meeting-room/update.sh"))
-if not UPDATE_SCRIPT.exists():
-    UPDATE_SCRIPT = BASE_DIR.parent / "update.sh"
+# Instalador usado para actualizar desde el panel. En produccion vive en /opt;
+# en desarrollo cae al repo actual para poder probar el endpoint sin instalar.
+INSTALL_SCRIPT = Path(os.environ.get("MEETING_INSTALL_SCRIPT", "/opt/meeting-room/install.sh"))
+if not INSTALL_SCRIPT.exists():
+    INSTALL_SCRIPT = BASE_DIR.parent / "install.sh"
 
 # Conectividad a internet (chequeo de fondo); ping_ms alimenta el diagnostico.
 CONNECTIVITY_PROBE = ("1.1.1.1", 443)
@@ -330,7 +330,7 @@ def restart_kiosk() -> str:
 
 
 def update_command() -> list[str]:
-    script = str(UPDATE_SCRIPT)
+    script = str(INSTALL_SCRIPT)
     if script.startswith("/opt/"):
         return [
             "sudo",
@@ -340,9 +340,8 @@ def update_command() -> list[str]:
             "--collect",
             "--unit=meeting-room-update",
             script,
-            "--from-panel",
         ]
-    return [script, "--from-panel"]
+    return [script]
 
 
 async def run_update() -> None:
@@ -354,7 +353,7 @@ async def run_update() -> None:
             update_command(),
             capture_output=True,
             text=True,
-            timeout=240,
+            timeout=600,
         )
     except (FileNotFoundError, PermissionError, subprocess.TimeoutExpired) as exc:
         update_state.update(running=False, last_ok=False, last_message=str(exc))
@@ -538,8 +537,8 @@ async def update_app(request: Request) -> dict:
     require_kiosk_pin(await pin_from_request(request))
     if update_state["running"] or (update_task and not update_task.done()):
         return {"ok": True, "running": True}
-    if not UPDATE_SCRIPT.exists():
-        raise HTTPException(status_code=500, detail=f"Script no encontrado: {UPDATE_SCRIPT}")
+    if not INSTALL_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail=f"Script no encontrado: {INSTALL_SCRIPT}")
     update_task = asyncio.create_task(run_update())
     return {"ok": True, "running": True}
 
