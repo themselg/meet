@@ -87,6 +87,19 @@
     font-size: 1.1vw; color: var(--onsurf); font-weight: 500;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .pin-wrap {
+    display: flex; align-items: center; justify-content: space-between; gap: 1vw;
+    margin-top: 1.1vw; padding: 0.85vw 1vw;
+    border-radius: 14px; border: 1px solid var(--outline);
+    background: rgba(255,255,255,0.05);
+  }
+  .pin-label {
+    color: var(--onsurfvar); font-size: 0.95vw; line-height: 1.15;
+  }
+  .pin {
+    color: var(--onsurf); font: 700 2.1vw/1 'Roboto Mono', monospace;
+    letter-spacing: 0.12em;
+  }
 
   /* Tarjeta offline: misma tarjeta, contenido intercambiado */
   .offline-box {
@@ -123,6 +136,10 @@
       <div class="divider"></div>
       <div class="visit">Visita</div>
       <div class="url" id="displayUrl">…</div>
+      <div class="pin-wrap">
+        <div class="pin-label">PIN de la sala</div>
+        <div class="pin" id="pairingPin">------</div>
+      </div>
     </div>
     <div id="offlineContent" hidden>
       <div class="offline-box">
@@ -146,6 +163,16 @@
   setInterval(tick, 5000);
 
   let qrUrl = null;
+  function publicUrl(url) {
+    try {
+      const parsed = new URL(url, window.location.href);
+      parsed.searchParams.delete('pin');
+      return parsed.href.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    } catch (_) {
+      return url.replace(/^https?:\/\//, '').replace(/\?.*$/, '');
+    }
+  }
+
   function renderQr(url) {
     if (!url || url === qrUrl) return;
     qrUrl = url;
@@ -154,8 +181,7 @@
     qr.make();
     document.getElementById('qrBox').innerHTML =
       qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
-    document.getElementById('displayUrl').textContent =
-      url.replace(/^https?:\/\//, '');
+    document.getElementById('displayUrl').textContent = publicUrl(url);
   }
 
   function applyWallpaper(state) {
@@ -173,9 +199,10 @@
 
   async function loadStatus() {
     try {
-      const res = await fetch('/api/status');
+      const res = await fetch('/api/status?kiosk=1');
       const data = await res.json();
       if (data.display_url) renderQr(data.display_url);
+      if (data.pairing_pin) document.getElementById('pairingPin').textContent = data.pairing_pin;
       applyWallpaper(data);
       setOffline(data.online === false);
     } catch (_) {

@@ -20,6 +20,11 @@ for _ in $(seq 1 50); do
   curl -fsS "localhost:$PORT/api/status" >/dev/null 2>&1 && break
   sleep 0.2
 done
+PIN=$(curl -fsS "localhost:$PORT/api/status?kiosk=1" | sed -n 's/.*"pairing_pin":"\([^"]*\)".*/\1/p')
+if [ -z "$PIN" ]; then
+  echo "FAIL no se obtuvo PIN del kiosko local"
+  exit 1
+fi
 
 fail=0
 check() {
@@ -39,11 +44,12 @@ json='Content-Type: application/json'
 check "GET /api/status"                    200 "localhost:$PORT/api/status"
 check "GET / (UI remota)"                  200 "localhost:$PORT/"
 check "GET /kiosk (pantalla sala)"         200 "localhost:$PORT/kiosk"
-check "URL valida (jitsi)"                 200 -X POST -H "$json" -d '{"url":"https://meet.jit.si/prueba-sala"}' "localhost:$PORT/api/meeting"
-check "URL valida (subdominio zoom)"       200 -X POST -H "$json" -d '{"url":"https://us05web.zoom.us/j/123?pwd=x"}' "localhost:$PORT/api/meeting"
-check "URL valida (dominio arbitrario)"    200 -X POST -H "$json" -d '{"url":"https://example.com/reunion"}' "localhost:$PORT/api/meeting"
-check "rechazo: http sin tls"              400 -X POST -H "$json" -d '{"url":"http://meet.google.com/abc"}' "localhost:$PORT/api/meeting"
-check "rechazo: sin URL"                   422 -X POST -H "$json" -d '{}' "localhost:$PORT/api/meeting"
+check "rechazo: sin PIN"                   403 -X POST -H "$json" -d '{"url":"https://meet.jit.si/prueba-sala"}' "localhost:$PORT/api/meeting"
+check "URL valida (jitsi)"                 200 -X POST -H "$json" -d "{\"url\":\"https://meet.jit.si/prueba-sala\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
+check "URL valida (subdominio zoom)"       200 -X POST -H "$json" -d "{\"url\":\"https://us05web.zoom.us/j/123?pwd=x\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
+check "URL valida (dominio arbitrario)"    200 -X POST -H "$json" -d "{\"url\":\"https://example.com/reunion\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
+check "rechazo: http sin tls"              400 -X POST -H "$json" -d "{\"url\":\"http://meet.google.com/abc\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
+check "rechazo: sin URL"                   422 -X POST -H "$json" -d "{\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting"
 
 # Con MEETING_ALLOWED_DOMAINS la restriccion opcional debe seguir funcionando
 PORT2=8124
@@ -55,26 +61,27 @@ for _ in $(seq 1 50); do
   curl -fsS "localhost:$PORT2/api/status" >/dev/null 2>&1 && break
   sleep 0.2
 done
-check "allowlist: dominio permitido"       200 -X POST -H "$json" -d '{"url":"https://zoom.us/j/123"}' "localhost:$PORT2/api/meeting"
-check "allowlist: dominio no listado"      400 -X POST -H "$json" -d '{"url":"https://example.com/x"}' "localhost:$PORT2/api/meeting"
-check "allowlist: dominio malicioso"       400 -X POST -H "$json" -d '{"url":"https://zoom.us.evil.com/j/1"}' "localhost:$PORT2/api/meeting"
+PIN2=$(curl -fsS "localhost:$PORT2/api/status?kiosk=1" | sed -n 's/.*"pairing_pin":"\([^"]*\)".*/\1/p')
+check "allowlist: dominio permitido"       200 -X POST -H "$json" -d "{\"url\":\"https://zoom.us/j/123\",\"pin\":\"$PIN2\"}" "localhost:$PORT2/api/meeting"
+check "allowlist: dominio no listado"      400 -X POST -H "$json" -d "{\"url\":\"https://example.com/x\",\"pin\":\"$PIN2\"}" "localhost:$PORT2/api/meeting"
+check "allowlist: dominio malicioso"       400 -X POST -H "$json" -d "{\"url\":\"https://zoom.us.evil.com/j/1\",\"pin\":\"$PIN2\"}" "localhost:$PORT2/api/meeting"
 
 # Transformacion de URLs: mute/nombre en jitsi, cliente web + nombre en zoom
-body=$(curl -s -X POST -H "$json" -d '{"url":"https://meet.jit.si/prueba-sala"}' "localhost:$PORT/api/meeting")
+body=$(curl -s -X POST -H "$json" -d "{\"url\":\"https://meet.jit.si/prueba-sala\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting")
 if echo "$body" | grep -q 'startWithAudioMuted=true' && echo "$body" | grep -q 'displayName'; then
   echo "OK   jitsi sale con mute y nombre de sala"
 else
   echo "FAIL jitsi sin transformar: $body"
   fail=1
 fi
-body=$(curl -s -X POST -H "$json" -d '{"url":"https://us05web.zoom.us/j/123456789?pwd=abc"}' "localhost:$PORT/api/meeting")
+body=$(curl -s -X POST -H "$json" -d "{\"url\":\"https://us05web.zoom.us/j/123456789?pwd=abc\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting")
 if echo "$body" | grep -q '/wc/join/123456789' && echo "$body" | grep -q 'uname=' && echo "$body" | grep -q 'pwd=abc'; then
   echo "OK   zoom reescrito a cliente web con nombre (conserva pwd)"
 else
   echo "FAIL zoom sin transformar: $body"
   fail=1
 fi
-body=$(curl -s -X POST -H "$json" -d '{"url":"https://teams.microsoft.com/l/meetup-join/xyz"}' "localhost:$PORT/api/meeting")
+body=$(curl -s -X POST -H "$json" -d "{\"url\":\"https://teams.microsoft.com/l/meetup-join/xyz\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/meeting")
 if echo "$body" | grep -q '"url":"https://teams.microsoft.com/l/meetup-join/xyz"'; then
   echo "OK   teams pasa sin cambios"
 else
@@ -98,26 +105,26 @@ if curl -s "localhost:$PORT/api/diagnostics" | grep -q '"cpu_percent"'; then
 else
   echo "FAIL diagnostics sin campos"; fail=1
 fi
-check "settings: preset valido"            200 -X POST -H "$json" -d '{"wallpaper":"lavanda"}' "localhost:$PORT/api/settings"
+check "settings: preset valido"            200 -X POST -H "$json" -d "{\"wallpaper\":\"lavanda\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
 if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"lavanda"'; then
   echo "OK   status refleja wallpaper lavanda"
 else
   echo "FAIL status no refleja el preset"; fail=1
 fi
-check "settings: preset invalido"          400 -X POST -H "$json" -d '{"wallpaper":"neon"}' "localhost:$PORT/api/settings"
-check "settings: custom sin imagen"        400 -X POST -H "$json" -d '{"wallpaper":"custom"}' "localhost:$PORT/api/settings"
+check "settings: preset invalido"          400 -X POST -H "$json" -d "{\"wallpaper\":\"neon\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
+check "settings: custom sin imagen"        400 -X POST -H "$json" -d "{\"wallpaper\":\"custom\",\"pin\":\"$PIN\"}" "localhost:$PORT/api/settings"
 # PNG minimo de 1x1 para la subida
 printf '\x89PNG\r\n\x1a\n' > /tmp/mini.png
 head -c 100 /dev/zero >> /tmp/mini.png
-check "wallpaper: subir PNG"               200 -X PUT --data-binary @/tmp/mini.png -H 'Content-Type: image/png' "localhost:$PORT/api/wallpaper"
+check "wallpaper: subir PNG"               200 -X PUT --data-binary @/tmp/mini.png -H 'Content-Type: image/png' -H "X-Kiosk-Pin: $PIN" "localhost:$PORT/api/wallpaper"
 check "wallpaper: servir imagen"           200 "localhost:$PORT/wallpaper"
 if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"custom"'; then
   echo "OK   status activa wallpaper custom tras subir"
 else
   echo "FAIL status no activo custom"; fail=1
 fi
-check "wallpaper: body no imagen"          400 -X PUT --data-binary 'hola' -H 'Content-Type: text/plain' "localhost:$PORT/api/wallpaper"
-check "wallpaper: eliminar"                200 -X DELETE "localhost:$PORT/api/wallpaper"
+check "wallpaper: body no imagen"          400 -X PUT --data-binary 'hola' -H 'Content-Type: text/plain' -H "X-Kiosk-Pin: $PIN" "localhost:$PORT/api/wallpaper"
+check "wallpaper: eliminar"                200 -X DELETE -H "X-Kiosk-Pin: $PIN" "localhost:$PORT/api/wallpaper"
 if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"bosque"'; then
   echo "OK   al eliminar vuelve al gradiente predeterminado"
 else
@@ -140,7 +147,7 @@ async def main():
 
     server = await asyncio.start_server(handler, "127.0.0.1", $KIOSK_VNC_PORT)
     async with websockets.connect(
-        "ws://localhost:$PORT/api/vnc", subprotocols=["binary"]
+        "ws://localhost:$PORT/api/vnc?pin=$PIN", subprotocols=["binary"]
     ) as ws:
         data = await asyncio.wait_for(ws.recv(), 3)
         assert data.startswith(b"RFB"), data
@@ -156,7 +163,7 @@ else
 fi
 
 check "GET /novnc/core/rfb.js (visor)"     200 "localhost:$PORT/novnc/core/rfb.js"
-check "POST /api/end"                      200 -X POST "localhost:$PORT/api/end"
+check "POST /api/end"                      200 -X POST -H "X-Kiosk-Pin: $PIN" "localhost:$PORT/api/end"
 
 status=$(curl -s "localhost:$PORT/api/status")
 if echo "$status" | grep -q '"state":"idle"'; then

@@ -19,8 +19,10 @@ enlace de Teams / Zoom / Meet / Webex / Jitsi y la sala entra a la reunión.
 ```
 
 - El kiosko muestra `kiosk.html` (reloj + instrucciones) con una conexión SSE abierta.
+- El kiosko muestra un PIN de emparejamiento; el QR abre la UI remota con ese PIN
+  precargado.
 - `POST /api/meeting` valida la URL (solo `https://`; opcionalmente restringida a
-  una lista de dominios) y la empuja por SSE.
+  una lista de dominios), exige el PIN y la empuja por SSE.
 - El kiosko navega a la reunión. El botón **Terminar reunión** de la UI remota llama
   `POST /api/end`, que reinicia el servicio del kiosko vía una regla sudoers acotada
   a ese único comando — la sala vuelve limpia a la pantalla de inicio.
@@ -100,9 +102,12 @@ En hardware real, al estrenar el equipo:
 | `GET` | `/` | UI remota |
 | `GET` | `/kiosk` | Pantalla del kiosko |
 | `GET` | `/api/status` | Estado de la sala, IP y dominios permitidos |
-| `POST` | `/api/meeting` | `{"url": "https://..."}` → valida y envía a la sala |
-| `POST` | `/api/end` | Termina la reunión y reinicia el kiosko |
+| `POST` | `/api/meeting` | `{"url": "https://...", "pin": "123456"}` → valida y envía a la sala |
+| `POST` | `/api/end` | Termina la reunión y reinicia el kiosko; requiere `X-Kiosk-Pin` |
 | `GET` | `/api/events` | Stream SSE (eventos `meeting` y `end`) |
+
+El PIN se genera automáticamente al arrancar el backend, o puede fijarse con
+`MEETING_KIOSK_PIN` en `/etc/meeting-room/server.env`.
 
 Por defecto se acepta **cualquier enlace `https://`**. Para restringir a ciertos
 servicios, define `MEETING_ALLOWED_DOMAINS` en `/etc/meeting-room/server.env`
@@ -168,6 +173,5 @@ Se desactiva todo con `KIOSK_VNC=0` en `/etc/meeting-room/kiosk.env`.
 
 ## Pendiente (fase 2)
 
-- Confirmación en pantalla / PIN antes de abrir la reunión.
 - Autenticación de la UI remota.
 - Compartir pantalla desde la sala (`xdg-desktop-portal-wlr`).

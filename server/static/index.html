@@ -241,8 +241,13 @@
     <!-- Vista Enviar -->
     <section id="view-send"><div>
       <h1>Enviar reunión a la sala</h1>
-      <p class="lede">Pega el enlace a enviar.</p>
+      <p class="lede">Ingresa el PIN que aparece en la pantalla y pega el enlace a enviar.</p>
       <form id="form">
+        <div class="field">
+          <span class="msr lead">pin</span>
+          <input id="pin" type="text" inputmode="numeric" required placeholder=" " autocomplete="one-time-code" maxlength="16">
+          <label for="pin">PIN de la sala</label>
+        </div>
         <div class="field">
           <span class="msr lead">link</span>
           <input id="url" type="url" required placeholder=" " autocomplete="off">
@@ -309,6 +314,32 @@
   import RFB from '/novnc/core/rfb.js';
 
   const $ = (id) => document.getElementById(id);
+  const PIN_STORAGE_KEY = 'meeting-room-kiosk-pin';
+
+  const params = new URLSearchParams(window.location.search);
+  const pinFromQr = params.get('pin');
+  if (pinFromQr) {
+    localStorage.setItem(PIN_STORAGE_KEY, pinFromQr);
+    params.delete('pin');
+    const cleanQuery = params.toString();
+    const cleanUrl = window.location.pathname + (cleanQuery ? `?${cleanQuery}` : '') + window.location.hash;
+    history.replaceState(null, '', cleanUrl);
+  }
+  $('pin').value = pinFromQr || localStorage.getItem(PIN_STORAGE_KEY) || '';
+
+  function currentPin() {
+    return $('pin').value.trim();
+  }
+
+  function rememberPin() {
+    const pin = currentPin();
+    if (pin) localStorage.setItem(PIN_STORAGE_KEY, pin);
+    return pin;
+  }
+
+  function pinHeader() {
+    return { 'X-Kiosk-Pin': rememberPin() };
+  }
 
   function showMsg(el, text, ok) {
     el.textContent = text;
@@ -340,7 +371,7 @@
   function connectScreen() {
     if (rfb) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    rfb = new RFB($('screen'), `${proto}://${location.host}/api/vnc`);
+    rfb = new RFB($('screen'), `${proto}://${location.host}/api/vnc?pin=${encodeURIComponent(rememberPin())}`);
     rfb.scaleViewport = true;
     rfb.background = '#0A0F0D';
     rfb.addEventListener('connect', () => { $('screenNote').style.display = 'none'; });
@@ -379,7 +410,7 @@
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallpaper: swatch.dataset.wp }),
+      body: JSON.stringify({ wallpaper: swatch.dataset.wp, pin: rememberPin() }),
     });
     const data = await res.json();
     if (res.ok) renderWallpaper(data);
@@ -393,7 +424,7 @@
     try {
       const res = await fetch('/api/wallpaper', {
         method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        headers: { 'Content-Type': file.type || 'application/octet-stream', ...pinHeader() },
         body: file,
       });
       const data = await res.json();
@@ -411,7 +442,7 @@
     }
   });
   $('wpDelete').addEventListener('click', async () => {
-    const res = await fetch('/api/wallpaper', { method: 'DELETE' });
+    const res = await fetch('/api/wallpaper', { method: 'DELETE', headers: pinHeader() });
     const data = await res.json();
     if (res.ok) {
       renderWallpaper(data);
@@ -492,7 +523,7 @@
       const res = await fetch('/api/meeting', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: $('url').value }),
+        body: JSON.stringify({ url: $('url').value, pin: rememberPin() }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -513,8 +544,10 @@
     if (!confirm('¿Terminar la sesión y regresar la sala a la pantalla de inicio?')) return;
     $('endBtn').disabled = true;
     try {
-      await fetch('/api/end', { method: 'POST' });
-      showMsg($('msg'), 'Sesión terminada; la sala vuelve a la pantalla de inicio', true);
+      const res = await fetch('/api/end', { method: 'POST', headers: pinHeader() });
+      const data = await res.json();
+      if (res.ok) showMsg($('msg'), 'Sesión terminada; la sala vuelve a la pantalla de inicio', true);
+      else showMsg($('msg'), data.detail || 'No se pudo terminar la sesión', false);
     } catch (_) {
       showMsg($('msg'), 'No se pudo contactar a la sala', false);
     } finally {

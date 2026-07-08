@@ -9,15 +9,17 @@ Servidor FastAPI que:
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import os
 import re
+import secrets
 import socket
 import subprocess
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
@@ -56,6 +58,10 @@ SSE_KEEPALIVE_SECONDS = 15
 # Direccion fija a mostrar en la pantalla del kiosko (p. ej. https://meet.iaan.mx).
 # Vacia = detectar la IP del dispositivo. La define /etc/meeting-room/server.env.
 DISPLAY_URL_OVERRIDE = os.environ.get("MEETING_DISPLAY_URL", "").strip() or None
+
+# PIN de emparejamiento mostrado en el kiosko. Si no se fija por entorno, se
+# regenera al reiniciar el backend y queda embebido en el QR.
+KIOSK_PIN = os.environ.get("MEETING_KIOSK_PIN", "").strip() or f"{secrets.randbelow(1_000_000):06d}"
 
 # Nombre con el que el equipo entra a las reuniones (p. ej. "Oficina IAAN").
 # Solo aplica en servicios que lo aceptan por URL (Jitsi, Zoom web).
@@ -104,10 +110,12 @@ app.mount("/vendor", StaticFiles(directory=STATIC_DIR / "vendor"), name="vendor"
 
 class MeetingRequest(BaseModel):
     url: str
+    pin: str | None = None
 
 
 class SettingsRequest(BaseModel):
     wallpaper: str
+    pin: str | None = None
 
 
 def load_settings() -> dict:
@@ -235,14 +243,57 @@ def sse_event(name: str, data: dict) -> str:
 
 def get_local_ip() -> str | None:
     """IP primaria del dispositivo (sin enviar tráfico: connect() sobre UDP)."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock = None
     try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.connect(("192.0.2.1", 80))
         return sock.getsockname()[0]
     except OSError:
         return None
     finally:
-        sock.close()
+        if sock:
+            sock.close()
+
+
+def require_kiosk_pin(pin: str | None) -> None:
+    if not pin or not secrets.compare_digest(pin.strip(), KIOSK_PIN):
+        raise HTTPException(status_code=403, detail="PIN incorrecto")
+
+
+async def pin_from_request(request: Request) -> str | None:
+    return (
+        request.headers.get("X-Kiosk-Pin")
+        or request.query_params.get("pin")
+        or request.query_params.get("kiosk_pin")
+    )
+
+
+def display_url_for_request(request: Request, include_pin: bool = False) -> str | None:
+    server = request.scope.get("server") or (None, None)
+    port = server[1]
+    ip = get_local_ip()
+    if DISPLAY_URL_OVERRIDE:
+        display_url = DISPLAY_URL_OVERRIDE
+    elif ip:
+        display_url = f"http://{ip}" if port in (80, None) else f"http://{ip}:{port}"
+    else:
+        return None
+
+    if not include_pin:
+        return display_url
+
+    parts = urlsplit(display_url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["pin"] = KIOSK_PIN
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def is_loopback_request(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host == "localhost"
 
 
 def restart_kiosk() -> str:
@@ -270,20 +321,14 @@ async def kiosk_ui() -> FileResponse:
 
 @app.get("/api/status")
 async def status(request: Request) -> dict:
-    server = request.scope.get("server") or (None, None)
-    port = server[1]
+    kiosk_view = request.query_params.get("kiosk") == "1" and is_loopback_request(request)
     ip = get_local_ip()
-    if DISPLAY_URL_OVERRIDE:
-        display_url = DISPLAY_URL_OVERRIDE
-    elif ip:
-        display_url = f"http://{ip}" if port in (80, None) else f"http://{ip}:{port}"
-    else:
-        display_url = None
     return {
         **room.snapshot(),
         **wallpaper_state(),
         "ip": ip,
-        "display_url": display_url,
+        "display_url": display_url_for_request(request, include_pin=kiosk_view),
+        "pairing_pin": KIOSK_PIN if kiosk_view else None,
         "allowed_domains": ALLOWED_DOMAINS,
         "online": net_state["online"],
     }
@@ -291,6 +336,7 @@ async def status(request: Request) -> dict:
 
 @app.post("/api/settings")
 async def update_settings(req: SettingsRequest) -> dict:
+    require_kiosk_pin(req.pin)
     name = req.wallpaper
     if name not in WALLPAPER_PRESETS + ("custom",):
         raise HTTPException(status_code=400, detail=f"Wallpaper desconocido: {name}")
@@ -306,6 +352,7 @@ async def update_settings(req: SettingsRequest) -> dict:
 
 @app.put("/api/wallpaper")
 async def upload_wallpaper(request: Request) -> dict:
+    require_kiosk_pin(await pin_from_request(request))
     data = await request.body()
     if len(data) > WALLPAPER_MAX_BYTES:
         raise HTTPException(status_code=413, detail="Imagen demasiado grande (máximo 8 MB)")
@@ -323,7 +370,8 @@ async def upload_wallpaper(request: Request) -> dict:
 
 
 @app.delete("/api/wallpaper")
-async def delete_wallpaper() -> dict:
+async def delete_wallpaper(request: Request) -> dict:
+    require_kiosk_pin(await pin_from_request(request))
     WALLPAPER_FILE.unlink(missing_ok=True)
     settings = load_settings()
     settings["wallpaper"] = DEFAULT_WALLPAPER
@@ -399,6 +447,7 @@ async def diagnostics() -> dict:
 
 @app.post("/api/meeting")
 async def create_meeting(req: MeetingRequest) -> dict:
+    require_kiosk_pin(req.pin)
     try:
         url = prepare_meeting_url(validate_meeting_url(req.url))
     except ValueError as exc:
@@ -409,7 +458,8 @@ async def create_meeting(req: MeetingRequest) -> dict:
 
 
 @app.post("/api/end")
-async def end_meeting() -> dict:
+async def end_meeting(request: Request) -> dict:
+    require_kiosk_pin(await pin_from_request(request))
     room.reset()
     await room.broadcast(sse_event("end", {}))
     return {"ok": True, "kiosk_restart": restart_kiosk()}
@@ -422,6 +472,10 @@ async def vnc_proxy(ws: WebSocket) -> None:
     Es lo que hace websockify, pero integrado: noVNC en la pagina de control
     se conecta aqui y ve/controla la pantalla de la sala.
     """
+    if not secrets.compare_digest((ws.query_params.get("pin") or "").strip(), KIOSK_PIN):
+        await ws.close(code=1008, reason="PIN incorrecto")
+        return
+
     await ws.accept(subprotocol="binary")
     try:
         reader, writer = await asyncio.open_connection(VNC_HOST, VNC_PORT)
