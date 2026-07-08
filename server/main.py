@@ -73,10 +73,18 @@ ROOM_NAME = os.environ.get("MEETING_ROOM_NAME", "").strip() or None
 VNC_HOST = "127.0.0.1"
 VNC_PORT = int(os.environ.get("KIOSK_VNC_PORT", "5900"))
 
+# Script de actualizacion rapida. En produccion vive en /opt; en desarrollo cae
+# al repo actual para poder probarlo sin instalar.
+UPDATE_SCRIPT = Path(os.environ.get("MEETING_UPDATE_SCRIPT", "/opt/meeting-room/update.sh"))
+if not UPDATE_SCRIPT.exists():
+    UPDATE_SCRIPT = BASE_DIR.parent / "update.sh"
+
 # Conectividad a internet (chequeo de fondo); ping_ms alimenta el diagnostico.
 CONNECTIVITY_PROBE = ("1.1.1.1", 443)
 CONNECTIVITY_INTERVAL = 30
 net_state = {"online": True, "ping_ms": None}
+update_state = {"running": False, "last_ok": None, "last_message": None, "started_at": None}
+update_task: asyncio.Task | None = None
 
 
 async def _probe_connectivity() -> None:
@@ -321,6 +329,36 @@ def restart_kiosk() -> str:
     return "ok"
 
 
+def update_command() -> list[str]:
+    script = str(UPDATE_SCRIPT)
+    if script.startswith("/opt/"):
+        return ["sudo", "-n", script, "--from-panel"]
+    return [script, "--from-panel"]
+
+
+async def run_update() -> None:
+    update_state.update(running=True, last_ok=None, last_message=None, started_at=time.time())
+    await room.broadcast(sse_event("updating", {"started_at": update_state["started_at"]}))
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            update_command(),
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+    except (FileNotFoundError, PermissionError, subprocess.TimeoutExpired) as exc:
+        update_state.update(running=False, last_ok=False, last_message=str(exc))
+        await room.broadcast(sse_event("update_error", {"detail": str(exc)}))
+        return
+    output = (proc.stderr.strip() or proc.stdout.strip())[-800:]
+    if proc.returncode != 0:
+        update_state.update(running=False, last_ok=False, last_message=output or "update falló")
+        await room.broadcast(sse_event("update_error", {"detail": update_state["last_message"]}))
+        return
+    update_state.update(running=False, last_ok=True, last_message=output or "ok")
+
+
 @app.get("/")
 async def remote_ui() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -343,6 +381,7 @@ async def status(request: Request) -> dict:
         "pairing_pin": KIOSK_PIN if kiosk_view else None,
         "allowed_domains": ALLOWED_DOMAINS,
         "online": net_state["online"],
+        "update": update_state,
     }
 
 
@@ -482,6 +521,18 @@ async def end_meeting(request: Request) -> dict:
     room.reset()
     await room.broadcast(sse_event("end", {}))
     return {"ok": True, "kiosk_restart": restart_kiosk()}
+
+
+@app.post("/api/update")
+async def update_app(request: Request) -> dict:
+    global update_task
+    require_kiosk_pin(await pin_from_request(request))
+    if update_state["running"] or (update_task and not update_task.done()):
+        return {"ok": True, "running": True}
+    if not UPDATE_SCRIPT.exists():
+        raise HTTPException(status_code=500, detail=f"Script no encontrado: {UPDATE_SCRIPT}")
+    update_task = asyncio.create_task(run_update())
+    return {"ok": True, "running": True}
 
 
 @app.websocket("/api/vnc")

@@ -115,6 +115,7 @@
   .card-head {
     display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
   }
+  .card-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   .card-title { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
   .card-title .msr { font-size: 20px; color: var(--p); font-variation-settings: 'FILL' 1; }
 
@@ -351,7 +352,10 @@
       <div class="card">
         <div class="card-head">
           <div class="card-title"><span class="msr">monitor_heart</span>Diagnóstico del sistema</div>
-          <span class="chip" id="diagChip" style="margin:0;"><span class="dotc"></span><span id="diagChipText">—</span></span>
+          <div class="card-actions">
+            <button class="btn-tonal" id="updateBtn"><span class="msr">sync</span>Actualizar</button>
+            <span class="chip" id="diagChip" style="margin:0;"><span class="dotc"></span><span id="diagChipText">—</span></span>
+          </div>
         </div>
         <div class="tiles">
           <div class="tile"><div class="t-label"><span class="msr">network_check</span>Conexión</div><div class="t-value" id="dPing">—</div><div class="t-sub" id="dPingSub"></div></div>
@@ -359,6 +363,7 @@
           <div class="tile"><div class="t-label"><span class="msr">device_thermostat</span>Temp.</div><div class="t-value" id="dTemp">—</div><div class="t-sub" id="dTempSub"></div></div>
           <div class="tile"><div class="t-label"><span class="msr">schedule</span>Uptime</div><div class="t-value" id="dUp">—</div><div class="t-sub" id="dUpSub"></div></div>
         </div>
+        <div class="msg" id="updateMsg"></div>
       </div>
     </div></section>
   </main>
@@ -556,12 +561,38 @@
   }
   setInterval(() => { if (adminVisible && !document.body.classList.contains('meeting')) loadDiagnostics(); }, 5000);
 
+  $('updateBtn').addEventListener('click', async () => {
+    if (!confirm('¿Actualizar la app ahora? La pantalla de la sala puede reiniciarse.')) return;
+    $('updateBtn').disabled = true;
+    showMsg($('updateMsg'), 'Actualización iniciada; la sala volverá en unos momentos', true);
+    try {
+      const res = await fetch('/api/update', { method: 'POST', headers: pinHeader() });
+      const data = await res.json();
+      if (!res.ok) {
+        showMsg($('updateMsg'), data.detail || 'No se pudo iniciar la actualización', false);
+        $('updateBtn').disabled = false;
+      }
+    } catch (_) {
+      showMsg($('updateMsg'), 'No se pudo contactar a la sala', false);
+      $('updateBtn').disabled = false;
+    }
+  });
+
   /* ---------- estado general ---------- */
   async function refresh() {
     try {
       const res = await fetch('/api/status');
       const data = await res.json();
       renderAppearance(data);
+      if (data.update && data.update.running) {
+        $('updateBtn').disabled = true;
+        showMsg($('updateMsg'), 'Actualizando la app…', true);
+      } else if (data.update && data.update.last_ok === false) {
+        $('updateBtn').disabled = false;
+        showMsg($('updateMsg'), data.update.last_message || 'La actualización falló', false);
+      } else if (data.update && data.update.last_ok === true) {
+        $('updateBtn').disabled = false;
+      }
       if (data.state === 'meeting') {
         $('elapsed').textContent = ` · ${elapsed(data.since)}`;
         $('meetingUrl').textContent = data.url;

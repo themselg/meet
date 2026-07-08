@@ -68,8 +68,14 @@ del kiosko: la IP del dispositivo (automática) o un dominio propio (p. ej.
 `meet.iaan.mx`). Queda en `/etc/meeting-room/server.env` (`MEETING_DISPLAY_URL`);
 edítalo y reinicia `meeting-room-server` para cambiarla después.
 
-**Actualizar:** `git pull && sudo ./install.sh` (es idempotente; conserva
+**Actualizar completo:** `git pull && sudo ./install.sh` (es idempotente; conserva
 `/etc/meeting-room/kiosk.env` y `/etc/meeting-room/server.env`).
+
+**Actualizar rápido:** `sudo ./update.sh` hace `git pull`, copia la app a
+`/opt/meeting-room`, recarga systemd y reinicia servicios sin reinstalar paquetes ni
+dependencias Python. Si cambió `server/requirements.txt`, usar
+`sudo ./update.sh --with-deps`. El panel de Configuración también puede disparar
+esta actualización; mientras corre, el kiosko muestra el estado "Actualizando".
 
 ### Verificación
 
@@ -104,6 +110,7 @@ En hardware real, al estrenar el equipo:
 | `GET` | `/api/status` | Estado de la sala, IP y dominios permitidos |
 | `POST` | `/api/meeting` | `{"url": "https://...", "pin": "123456"}` → valida y envía a la sala |
 | `POST` | `/api/end` | Termina la reunión y reinicia el kiosko; requiere `X-Kiosk-Pin` |
+| `POST` | `/api/update` | Lanza la actualización rápida; requiere `X-Kiosk-Pin` |
 | `GET` | `/api/events` | Stream SSE (eventos `meeting` y `end`) |
 
 El PIN se genera automáticamente al arrancar el backend, o puede fijarse con
@@ -145,8 +152,8 @@ La UI implementa el diseño "Universal Meeting Appliance MD3":
   estado "Sin conexión" con su píldora roja.
 - **Panel de control**: navigation rail con dos vistas — **Enviar** (campo MD3 +
   botón "Enviar a la sala") y **Configuración** (wallpaper y estilo del reloj del
-  kiosko, dispositivos detectados de solo lectura y diagnóstico real: latencia,
-  CPU, temperatura, uptime vía `GET /api/diagnostics`).
+  kiosko, actualización rápida, dispositivos detectados de solo lectura y
+  diagnóstico real: latencia, CPU, temperatura, uptime vía `GET /api/diagnostics`).
 - **Sesión activa**: top app bar con "Terminar sesión" y el escritorio de la sala
   ocupando el resto (noVNC).
 

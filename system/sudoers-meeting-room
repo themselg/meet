@@ -1,2 +1,5 @@
 # Permite al backend reiniciar UNICAMENTE el servicio del kiosko (boton "Terminar reunion")
 meeting-room ALL=(root) NOPASSWD: /usr/bin/systemctl restart meeting-room-kiosk.service
+
+# Permite al panel ejecutar la actualizacion rapida de la app.
+meeting-room ALL=(root) NOPASSWD: /opt/meeting-room/update.sh --from-panel

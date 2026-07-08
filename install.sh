@@ -12,10 +12,18 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR=/opt/meeting-room
 
 echo "==> Paquetes (EPEL: cage y chromium)"
-dnf install -y epel-release
-dnf install -y cage chromium python3 python3-pip pipewire wireplumber \
-  pipewire-pulseaudio xdg-desktop-portal curl \
-  mesa-dri-drivers mesa-libEGL mesa-libgbm libinput wayvnc
+if command -v cage >/dev/null 2>&1 && \
+   { command -v chromium-browser >/dev/null 2>&1 || command -v chromium >/dev/null 2>&1; } && \
+   command -v python3 >/dev/null 2>&1 && \
+   command -v curl >/dev/null 2>&1 && \
+   command -v wayvnc >/dev/null 2>&1; then
+  echo "Paquetes base ya presentes; se omite dnf install."
+else
+  dnf install -y epel-release
+  dnf install -y cage chromium python3 python3-pip pipewire wireplumber \
+    pipewire-pulseaudio xdg-desktop-portal curl \
+    mesa-dri-drivers mesa-libEGL mesa-libgbm libinput wayvnc
+fi
 
 echo "==> Usuarios"
 id -u meeting-room &>/dev/null || \
@@ -28,6 +36,7 @@ mkdir -p "$APP_DIR"
 cp -r "$REPO_DIR/server" "$APP_DIR/"
 cp -r "$REPO_DIR/scripts" "$APP_DIR/"
 chmod +x "$APP_DIR"/scripts/*.sh
+install -m 0755 "$REPO_DIR/update.sh" "$APP_DIR/update.sh"
 
 echo "==> Entorno virtual de Python"
 [ -d "$APP_DIR/venv" ] || python3 -m venv "$APP_DIR/venv"
@@ -38,6 +47,10 @@ echo "==> Configuracion"
 mkdir -p /etc/meeting-room
 # kiosk.env se conserva si ya existe (guarda VM_MODE local)
 [ -f /etc/meeting-room/kiosk.env ] || cp "$REPO_DIR/system/kiosk.env" /etc/meeting-room/kiosk.env
+cat > /etc/meeting-room/update.env <<EOF
+# Repo fuente usado por /opt/meeting-room/update.sh para git pull.
+MEETING_ROOM_REPO_DIR=$REPO_DIR
+EOF
 
 mkdir -p /etc/chromium/policies/managed
 cp "$REPO_DIR/system/chromium-policy.json" /etc/chromium/policies/managed/meeting-room.json

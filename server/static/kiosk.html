@@ -64,12 +64,7 @@
   }
 
   body[data-clock="soft"] .clock-block {
-    padding: clamp(28px, 3.2vw, 58px) clamp(34px, 4.2vw, 76px);
-    border-radius: 8px;
-    background: linear-gradient(145deg, rgba(8,20,35,0.44), rgba(8,20,35,0.18));
-    border: 1px solid rgba(255,255,255,0.16);
-    box-shadow: 0 22px 70px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.12);
-    backdrop-filter: blur(10px) saturate(1.1);
+    padding: 0;
   }
   body[data-clock="soft"] #clock { font-weight: 560; }
   body[data-clock="soft"] #date {
@@ -108,12 +103,7 @@
 
   body[data-clock="panel"] .clock-block {
     display: inline-flex; align-items: center; gap: clamp(26px, 3vw, 54px);
-    padding: clamp(24px, 2.7vw, 48px) clamp(30px, 3.6vw, 66px);
-    border-radius: 8px;
-    background: rgba(255,255,255,0.10);
-    border: 1px solid rgba(255,255,255,0.18);
-    box-shadow: 0 18px 58px rgba(0,0,0,0.28);
-    backdrop-filter: blur(12px);
+    padding: 0;
   }
   body[data-clock="panel"] #clock {
     font-family: 'Roboto Mono', monospace; font-weight: 540;
@@ -183,6 +173,20 @@
   .offline-sub {
     text-align: center; font-size: 1vw; color: var(--onsurfvar); line-height: 1.4;
   }
+  .updating {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 22px; background: rgba(1,14,18,0.82); color: var(--onsurf);
+    text-align: center;
+  }
+  .updating .spinner {
+    width: 76px; height: 76px; border-radius: 50%;
+    border: 5px solid rgba(255,255,255,0.22); border-top-color: var(--onsurf);
+    animation: spin 0.9s linear infinite;
+  }
+  .updating .title { font-size: clamp(32px, 4vw, 62px); font-weight: 640; }
+  .updating .sub { font-size: clamp(18px, 1.5vw, 28px); color: var(--onsurfvar); }
+  @keyframes spin { to { transform: rotate(360deg); } }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -197,6 +201,12 @@
 
   <div class="pill" id="offlinePill" hidden>
     <span class="msr">cloud_off</span>Sin conexión
+  </div>
+
+  <div class="updating" id="updatingView" hidden>
+    <div class="spinner"></div>
+    <div class="title">Actualizando</div>
+    <div class="sub">La pantalla volverá en unos momentos</div>
   </div>
 
   <div class="card">
@@ -268,6 +278,10 @@
     document.getElementById('qrContent').hidden = offline;
   }
 
+  function setUpdating(updating) {
+    document.getElementById('updatingView').hidden = !updating;
+  }
+
   async function loadStatus() {
     try {
       const res = await fetch('/api/status?kiosk=1');
@@ -291,6 +305,7 @@
   // En producción el servicio del kiosko se reinicia; esto cubre el modo desarrollo.
   es.addEventListener('end', () => window.location.reload());
   es.addEventListener('settings', (e) => applyAppearance(JSON.parse(e.data)));
+  es.addEventListener('updating', () => setUpdating(true));
 </script>
 </body>
 </html>
