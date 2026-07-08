@@ -7,10 +7,12 @@ KIOSK_URL="${KIOSK_URL:-$SERVER_URL/kiosk}"
 CHROMIUM_BIN="${CHROMIUM_BIN:-/usr/bin/chromium-browser}"
 
 # Cursor invisible: el control remoto usa el cursor local del navegador (sin
-# retraso) y la TV no muestra una flecha moviendose sola. Dos frentes, porque
-# chromium puede dibujar el cursor via compositor (cursor-shape) o por si mismo
-# (tema que lee de la config GTK).
-if [ "${KIOSK_HIDE_CURSOR:-1}" = "1" ] && [ -d /usr/share/icons/meeting-room-hidden ]; then
+# retraso) y la TV no muestra una flecha moviendose sola. XCURSOR_PATH limita
+# la busqueda de temas a un directorio donde todo es transparente (con alias
+# "Adwaita" y "default" para los clientes que ignoran XCURSOR_THEME, como el
+# cursor propio de chromium); asi da igual quien dibuje el cursor y que tema pida.
+if [ "${KIOSK_HIDE_CURSOR:-1}" = "1" ] && [ -d /opt/meeting-room/cursors ]; then
+  export XCURSOR_PATH=/opt/meeting-room/cursors
   export XCURSOR_THEME=meeting-room-hidden
   export XCURSOR_SIZE=24
   for gtkdir in gtk-3.0 gtk-4.0; do
