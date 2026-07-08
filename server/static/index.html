@@ -383,6 +383,7 @@
 
   const $ = (id) => document.getElementById(id);
   const PIN_STORAGE_KEY = 'meeting-room-kiosk-pin';
+  const UPDATE_PENDING_KEY = 'meeting-room-update-started-at';
 
   const params = new URLSearchParams(window.location.search);
   const pinFromQr = params.get('pin');
@@ -577,7 +578,9 @@
     try {
       const res = await fetch('/api/update', { method: 'POST', headers: pinHeader() });
       const data = await res.json();
-      if (!res.ok) {
+      if (res.ok) {
+        localStorage.setItem(UPDATE_PENDING_KEY, String(Date.now()));
+      } else {
         showMsg($('updateMsg'), data.detail || 'No se pudo iniciar la actualización', false);
         $('updateBtn').disabled = false;
       }
@@ -593,14 +596,23 @@
       const res = await fetch('/api/status');
       const data = await res.json();
       renderAppearance(data);
+      const updateStartedAt = Number(localStorage.getItem(UPDATE_PENDING_KEY) || 0);
       if (data.update && data.update.running) {
+        localStorage.setItem(UPDATE_PENDING_KEY, String(updateStartedAt || Date.now()));
         $('updateBtn').disabled = true;
         showMsg($('updateMsg'), 'Actualizando la app…', true);
       } else if (data.update && data.update.last_ok === false) {
+        localStorage.removeItem(UPDATE_PENDING_KEY);
         $('updateBtn').disabled = false;
         showMsg($('updateMsg'), data.update.last_message || 'La actualización falló', false);
       } else if (data.update && data.update.last_ok === true) {
+        localStorage.removeItem(UPDATE_PENDING_KEY);
         $('updateBtn').disabled = false;
+        showMsg($('updateMsg'), 'Actualización completada', true);
+      } else if (updateStartedAt && Date.now() - updateStartedAt > 10000) {
+        localStorage.removeItem(UPDATE_PENDING_KEY);
+        $('updateBtn').disabled = false;
+        showMsg($('updateMsg'), 'Actualización completada', true);
       }
       if (data.state === 'meeting') {
         $('elapsed').textContent = ` · ${elapsed(data.since)}`;
@@ -619,6 +631,10 @@
     } catch (_) {
       $('stateText').textContent = 'Sin conexión con la sala';
       $('stateChip').classList.add('off');
+      if (localStorage.getItem(UPDATE_PENDING_KEY)) {
+        $('updateBtn').disabled = true;
+        showMsg($('updateMsg'), 'Actualizando la app…', true);
+      }
     }
   }
   refresh();
