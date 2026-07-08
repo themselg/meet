@@ -11,6 +11,7 @@ fi
 PORT=8123
 export MEETING_ROOM_NAME="Sala Test"
 export KIOSK_VNC_PORT=59123
+rm -rf .state  # estado dev limpio para las pruebas de settings/wallpaper
 (cd server && exec ../.venv/bin/uvicorn main:app --host 127.0.0.1 --port $PORT --log-level warning) &
 PID=$!
 trap 'kill $PID 2>/dev/null || true' EXIT
@@ -89,6 +90,42 @@ else
   echo "FAIL SSE no reenvio la reunion activa"
   fail=1
 fi
+
+# Settings y wallpaper (MD3): presets, imagen propia y diagnostico
+check "GET /api/diagnostics"               200 "localhost:$PORT/api/diagnostics"
+if curl -s "localhost:$PORT/api/diagnostics" | grep -q '"cpu_percent"'; then
+  echo "OK   diagnostics trae cpu_percent"
+else
+  echo "FAIL diagnostics sin campos"; fail=1
+fi
+check "settings: preset valido"            200 -X POST -H "$json" -d '{"wallpaper":"lavanda"}' "localhost:$PORT/api/settings"
+if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"lavanda"'; then
+  echo "OK   status refleja wallpaper lavanda"
+else
+  echo "FAIL status no refleja el preset"; fail=1
+fi
+check "settings: preset invalido"          400 -X POST -H "$json" -d '{"wallpaper":"neon"}' "localhost:$PORT/api/settings"
+check "settings: custom sin imagen"        400 -X POST -H "$json" -d '{"wallpaper":"custom"}' "localhost:$PORT/api/settings"
+# PNG minimo de 1x1 para la subida
+printf '\x89PNG\r\n\x1a\n' > /tmp/mini.png
+head -c 100 /dev/zero >> /tmp/mini.png
+check "wallpaper: subir PNG"               200 -X PUT --data-binary @/tmp/mini.png -H 'Content-Type: image/png' "localhost:$PORT/api/wallpaper"
+check "wallpaper: servir imagen"           200 "localhost:$PORT/wallpaper"
+if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"custom"'; then
+  echo "OK   status activa wallpaper custom tras subir"
+else
+  echo "FAIL status no activo custom"; fail=1
+fi
+check "wallpaper: body no imagen"          400 -X PUT --data-binary 'hola' -H 'Content-Type: text/plain' "localhost:$PORT/api/wallpaper"
+check "wallpaper: eliminar"                200 -X DELETE "localhost:$PORT/api/wallpaper"
+if curl -s "localhost:$PORT/api/status" | grep -q '"wallpaper":"bosque"'; then
+  echo "OK   al eliminar vuelve al gradiente predeterminado"
+else
+  echo "FAIL no volvio al predeterminado"; fail=1
+fi
+check "wallpaper: 404 sin imagen"          404 "localhost:$PORT/wallpaper"
+check "GET /fonts/fonts.css"               200 "localhost:$PORT/fonts/fonts.css"
+check "GET /vendor/qrcode.js"              200 "localhost:$PORT/vendor/qrcode.js"
 
 # Puente VNC: un servidor TCP falso responde el saludo RFB y debe llegar por WS
 if .venv/bin/python - <<EOF

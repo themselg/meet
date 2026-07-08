@@ -4,89 +4,220 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sala de Reuniones — Control</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --p: #006A60; --onp: #fff; --p-hover: #00594f;
+    --sc: #CCE8E2; --onsc: #05201C;
+    --bg: #F7FAF8; --surfc: #ECF0EE; --card: #fff;
+    --ontext: #171D1B; --onvar: #3F4946; --muted: #5A6360;
+    --outline: #6F7975; --divider: #DCE5E1;
+    --err: #BA1A1A; --err-bg: #F9DEDC; --err-on: #93000A;
+  }
   body {
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    background: #0b1220; color: #e8edf7;
+    font-family: 'Roboto Flex', system-ui, sans-serif;
+    background: var(--bg); color: var(--ontext);
     min-height: 100vh;
   }
+  button { font-family: inherit; cursor: pointer; }
+  [hidden] { display: none !important; }
 
-  /* ---- Vista de inicio (sala disponible) ---- */
-  #idleView { display: flex; justify-content: center; padding: 3rem 1.2rem; }
-  main { width: 100%; max-width: 34rem; display: flex; flex-direction: column; gap: 1.4rem; }
-  h1 { font-size: 1.5rem; font-weight: 600; }
-  h1 small { display: block; font-size: 0.85rem; font-weight: 400; color: #8ea3c8; margin-top: 0.3rem; }
+  /* ================= App: rail + contenido ================= */
+  #app { display: flex; min-height: 100vh; }
+
+  .rail {
+    flex: 0 0 96px; padding: 22px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    border-right: 1px solid var(--divider);
+  }
+  .rail .logo {
+    width: 48px; height: 48px; border-radius: 14px; background: var(--p);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
+  }
+  .rail .logo .msr { font-size: 26px; color: #fff; font-variation-settings: 'FILL' 1; }
+  .rail-item {
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    background: none; border: none; color: var(--onvar); font-size: 12px;
+  }
+  .rail-item .ind {
+    width: 56px; height: 32px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .rail-item .msr { font-size: 24px; color: var(--onvar); }
+  .rail-item.active { color: var(--ontext); font-weight: 600; }
+  .rail-item.active .ind { background: var(--sc); }
+  .rail-item.active .msr { color: var(--onsc); font-variation-settings: 'FILL' 1; }
+
+  main { flex: 1; padding: 48px 48px 64px; }
+
+  /* ================= Vista Enviar ================= */
+  #view-send > div { max-width: 600px; margin: 0 auto; }
+  h1 { font-weight: 600; font-size: 32px; letter-spacing: -0.02em; margin: 0 0 10px; }
+  .lede { font-size: 16px; color: var(--onvar); margin: 0 0 34px; line-height: 1.5; }
+
+  .field { position: relative; margin-bottom: 24px; }
+  .field .lead {
+    position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    font-size: 22px; color: var(--p); pointer-events: none;
+  }
+  .field input {
+    width: 100%; height: 56px; padding: 0 16px 0 50px;
+    font-family: 'Roboto Mono', monospace; font-size: 14px; color: var(--ontext);
+    background: transparent; border: 1px solid var(--outline); border-radius: 4px;
+    outline: none;
+  }
+  .field input:focus { border-color: var(--p); box-shadow: inset 0 0 0 1px var(--p); }
+  .field label {
+    position: absolute; left: 46px; top: 50%; transform: translateY(-50%);
+    font-family: 'Roboto Flex', sans-serif; font-size: 15px; color: var(--onvar);
+    background: var(--bg); padding: 0 6px; pointer-events: none;
+    transition: all 0.12s ease;
+  }
+  .field input:focus ~ label,
+  .field input:not(:placeholder-shown) ~ label {
+    top: 0; left: 12px; font-size: 12px; font-weight: 500; color: var(--p);
+  }
+
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    border: none; border-radius: 100px; font-weight: 600;
+    background: var(--p); color: var(--onp);
+    width: 100%; height: 56px; font-size: 16px; letter-spacing: 0.01em;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .btn:hover { background: var(--p-hover); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn .msr { font-size: 20px; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600; color: var(--onsc);
+    background: var(--sc); padding: 7px 14px; border-radius: 100px; margin-top: 26px;
+  }
+  .chip .dotc { width: 8px; height: 8px; border-radius: 50%; background: var(--p); }
+  .chip.off { background: var(--err-bg); color: var(--err-on); }
+  .chip.off .dotc { background: var(--err); }
+
+  .msg { font-size: 14px; padding: 12px 16px; border-radius: 12px; margin-top: 18px; display: none; }
+  .msg.ok { display: block; background: var(--sc); color: var(--onsc); }
+  .msg.err { display: block; background: var(--err-bg); color: var(--err-on); }
+
+  .services { font-size: 13px; color: var(--muted); margin-top: 30px; line-height: 1.6; }
+
+  /* ================= Vista Configuración ================= */
+  #view-admin > div { max-width: 860px; margin: 0 auto; }
+  #view-admin h1 { font-size: 26px; }
   .card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 0.9rem; padding: 1.3rem;
+    background: var(--surfc); border-radius: 16px; padding: 24px 26px; margin-bottom: 18px;
   }
-  .state { display: flex; align-items: center; gap: 0.6rem; font-size: 1.05rem; }
-  .dot { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #4fc57f; flex-shrink: 0; }
-  form { display: flex; flex-direction: column; gap: 0.8rem; }
-  label { font-size: 0.9rem; color: #aebcd9; }
-  input[type=url] {
-    width: 100%; padding: 0.8rem 1rem; font-size: 1rem;
-    background: #060a14; color: #e8edf7;
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 0.6rem;
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
   }
-  input[type=url]:focus { outline: none; border-color: #5b8def; }
-  button {
-    padding: 0.8rem 1rem; font-size: 1rem; font-weight: 600;
-    border: none; border-radius: 0.6rem; cursor: pointer;
-    background: #5b8def; color: #fff;
-  }
-  button:hover { background: #4a7de0; }
-  button.danger { background: #b8433f; }
-  button.danger:hover { background: #a53531; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  .msg { font-size: 0.9rem; padding: 0.7rem 1rem; border-radius: 0.6rem; display: none; margin-top: 0.8rem; }
-  .msg.ok { display: block; background: rgba(79,197,127,0.12); color: #7fd4a8; }
-  .msg.err { display: block; background: rgba(224,91,91,0.12); color: #ef9a9a; }
-  .services { font-size: 0.8rem; color: #66759a; line-height: 1.6; }
+  .card-title { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+  .card-title .msr { font-size: 20px; color: var(--p); font-variation-settings: 'FILL' 1; }
 
-  /* ---- Vista de reunión (pantalla completa) ---- */
+  .swatches { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .swatch {
+    position: relative; width: 44px; height: 44px; border-radius: 50%;
+    border: none; padding: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    background-size: cover; background-position: center;
+  }
+  .swatch[data-wp="oceano"]    { background: radial-gradient(130% 120% at 20% 10%, #1c4a8a, #071527); }
+  .swatch[data-wp="bosque"]    { background: radial-gradient(130% 120% at 20% 10%, #0e6a5e, #04221e); }
+  .swatch[data-wp="lavanda"]   { background: radial-gradient(130% 120% at 20% 10%, #533490, #17122b); }
+  .swatch[data-wp="atardecer"] { background: radial-gradient(130% 120% at 20% 10%, #9a4222, #2c130a); }
+  .swatch.active::after {
+    content: ''; position: absolute; inset: -6px; border-radius: 50%;
+    border: 2px solid var(--p);
+  }
+  .wp-actions { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+  .btn-tonal {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--sc); color: var(--onsc); border: none; border-radius: 100px;
+    height: 40px; padding: 0 18px; font-weight: 600; font-size: 14px;
+  }
+  .btn-text {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: none; color: var(--p); border: none; border-radius: 100px;
+    height: 40px; padding: 0 14px; font-weight: 600; font-size: 14px;
+  }
+  .btn-tonal .msr, .btn-text .msr { font-size: 18px; }
+
+  .ro-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px 22px; }
+  .ro-field {
+    position: relative; border: 1px solid var(--outline); border-radius: 4px;
+    padding: 14px; background: var(--surfc);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ro-field .tag {
+    position: absolute; top: -8px; left: 11px; background: var(--surfc);
+    padding: 0 6px; font-size: 12px; color: var(--onvar);
+  }
+  .ro-field .msr { font-size: 20px; color: var(--p); }
+  .ro-field .val { font-size: 15px; color: var(--ontext); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .tile { background: var(--card); border-radius: 12px; padding: 16px 18px; }
+  .tile .t-label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--onvar); margin-bottom: 8px; }
+  .tile .t-label .msr { font-size: 18px; color: var(--p); }
+  .tile .t-value { font-weight: 600; font-size: 22px; }
+  .tile .t-sub { font-size: 12px; color: var(--onvar); }
+  .tile .t-sub.good { color: var(--p); }
+
+  /* ================= Vista Sesión (pantalla completa) ================= */
   #meetingView {
     position: fixed; inset: 0; z-index: 10;
-    display: none; flex-direction: column;
-    background: #060a14;
+    display: none; flex-direction: column; background: #0A0F0D;
   }
   body.meeting #meetingView { display: flex; }
-  body.meeting #idleView { display: none; }
+  body.meeting #app { display: none; }
   #meetingView header {
-    display: flex; align-items: center; gap: 1rem;
-    padding: 0.55rem 1rem;
-    background: #0b1220; border-bottom: 1px solid rgba(255,255,255,0.1);
-    flex-shrink: 0;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px 14px 24px; background: #1B211F; gap: 16px;
   }
-  #meetingView header .title { font-weight: 600; white-space: nowrap; }
-  #meetingView header .minfo {
-    flex: 1; min-width: 0;
-    font-size: 0.82rem; color: #8ea3c8;
+  #meetingView header .lead-icon { font-size: 26px; color: #53DBC9; font-variation-settings: 'FILL' 1; }
+  #meetingView header .minfo { flex: 1; min-width: 0; line-height: 1.3; }
+  #meetingView header .m1 {
+    font-size: 13px; color: #BEC9C5; display: flex; align-items: center; gap: 7px;
+  }
+  #meetingView header .m1 .reddot { width: 7px; height: 7px; border-radius: 50%; background: #FF5449; }
+  #meetingView header .m2 {
+    font-size: 12px; color: #8A938F; font-family: 'Roboto Mono', monospace;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  #meetingView header button { padding: 0.5rem 1rem; font-size: 0.9rem; }
+  .btn-end {
+    display: flex; align-items: center; gap: 9px; flex-shrink: 0;
+    background: var(--err); color: #fff; border: none; border-radius: 100px;
+    height: 48px; padding: 0 22px; font-weight: 600; font-size: 15px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .btn-end:hover { background: #93000A; }
+  .btn-end:disabled { opacity: 0.6; }
+  .btn-end .msr { font-size: 20px; }
   #screenWrap { position: relative; flex: 1; min-height: 0; }
   #screen { position: absolute; inset: 0; }
-  /* Siempre el cursor local sobre el visor: el del compositor va oculto en la
-     sala y el que enviara el servidor VNC se ignora (evita flecha con retraso) */
+  /* Siempre el cursor local sobre el visor (el de la sala va oculto) */
   #screen canvas { cursor: default !important; }
   #screenNote {
     position: absolute; inset: 0; z-index: 1;
     display: flex; align-items: center; justify-content: center;
-    color: #66759a; font-size: 0.95rem;
-    pointer-events: none;
+    color: #66759a; font-size: 15px; pointer-events: none;
   }
 </style>
 </head>
 <body>
 
+<!-- ===== Sesión activa ===== -->
 <div id="meetingView">
   <header>
-    <span class="title">Sala de Reuniones</span>
-    <span class="minfo" id="meetingInfo"></span>
-    <button class="danger" id="endBtn">Terminar reunión</button>
+    <span class="msr lead-icon">meeting_room</span>
+    <div class="minfo">
+      <div class="m1"><span class="reddot"></span>Sesión en curso<span id="elapsed"></span></div>
+      <div class="m2" id="meetingUrl"></div>
+    </div>
+    <button class="btn-end" id="endBtn"><span class="msr">call_end</span>Terminar sesión</button>
   </header>
   <div id="screenWrap">
     <div id="screen"></div>
@@ -94,42 +225,94 @@
   </div>
 </div>
 
-<div id="idleView">
-<main>
-  <h1>Sala de Reuniones<small>Envía una reunión a la pantalla de la sala</small></h1>
+<!-- ===== App ===== -->
+<div id="app">
+  <nav class="rail">
+    <div class="logo"><span class="msr">hub</span></div>
+    <button class="rail-item active" data-view="send">
+      <span class="ind"><span class="msr">cast</span></span>Enviar
+    </button>
+    <button class="rail-item" data-view="admin">
+      <span class="ind"><span class="msr">settings</span></span>Configuración
+    </button>
+  </nav>
 
-  <div class="card">
-    <div class="state">
-      <span class="dot"></span>
-      <div id="stateText">Consultando estado…</div>
-    </div>
-  </div>
+  <main>
+    <!-- Vista Enviar -->
+    <section id="view-send"><div>
+      <h1>Enviar reunión a la sala</h1>
+      <p class="lede">Pega el enlace a enviar.</p>
+      <form id="form">
+        <div class="field">
+          <span class="msr lead">link</span>
+          <input id="url" type="url" required placeholder=" " autocomplete="off">
+          <label for="url">Enlace de la reunión</label>
+        </div>
+        <button type="submit" class="btn" id="sendBtn"><span class="msr">cast</span>Enviar a la sala</button>
+      </form>
+      <div class="msg" id="msg"></div>
+      <div><span class="chip" id="stateChip"><span class="dotc"></span><span id="stateText">Consultando estado…</span></span></div>
+      <p class="services" id="services"></p>
+    </div></section>
 
-  <div class="card">
-    <form id="form">
-      <label for="url">Enlace de la reunión (Teams, Zoom, Meet, Webex, Jitsi)</label>
-      <input type="url" id="url" placeholder="https://meet.google.com/abc-defg-hij" required autofocus>
-      <button type="submit" id="sendBtn">Abrir en la sala</button>
-    </form>
-    <div class="msg" id="msg"></div>
-  </div>
+    <!-- Vista Configuración -->
+    <section id="view-admin" hidden><div>
+      <h1>Configuración</h1>
+      <p class="lede">Apariencia del kiosko, dispositivos y estado del sistema.</p>
 
-  <p class="services" id="services"></p>
-</main>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="msr">wallpaper</span>Wallpaper del kiosko</div>
+          <div class="card-title" style="font-weight:400;font-size:13px;color:var(--muted);">
+            <span class="msr" style="font-size:17px;">palette</span>El color de la pantalla se adapta al fondo
+          </div>
+        </div>
+        <div class="swatches" id="swatches">
+          <button class="swatch" data-wp="oceano" title="Océano"></button>
+          <button class="swatch" data-wp="bosque" title="Bosque"></button>
+          <button class="swatch" data-wp="lavanda" title="Lavanda"></button>
+          <button class="swatch" data-wp="atardecer" title="Atardecer"></button>
+          <button class="swatch" data-wp="custom" title="Imagen propia" hidden></button>
+        </div>
+        <div class="wp-actions">
+          <input type="file" id="wpFile" accept="image/png,image/jpeg,image/webp" hidden>
+          <button class="btn-tonal" id="wpUpload"><span class="msr">upload</span>Subir imagen</button>
+          <button class="btn-text" id="wpDelete" hidden><span class="msr">delete</span>Quitar imagen</button>
+        </div>
+        <div class="msg" id="wpMsg"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="msr">tune</span>Audio y video</div>
+        </div>
+        <div class="ro-grid" id="devices"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="msr">monitor_heart</span>Diagnóstico del sistema</div>
+          <span class="chip" id="diagChip" style="margin:0;"><span class="dotc"></span><span id="diagChipText">—</span></span>
+        </div>
+        <div class="tiles">
+          <div class="tile"><div class="t-label"><span class="msr">network_check</span>Conexión</div><div class="t-value" id="dPing">—</div><div class="t-sub" id="dPingSub"></div></div>
+          <div class="tile"><div class="t-label"><span class="msr">memory</span>CPU</div><div class="t-value" id="dCpu">—</div><div class="t-sub" id="dCpuSub"></div></div>
+          <div class="tile"><div class="t-label"><span class="msr">device_thermostat</span>Temp.</div><div class="t-value" id="dTemp">—</div><div class="t-sub" id="dTempSub"></div></div>
+          <div class="tile"><div class="t-label"><span class="msr">schedule</span>Uptime</div><div class="t-value" id="dUp">—</div><div class="t-sub" id="dUpSub"></div></div>
+        </div>
+      </div>
+    </div></section>
+  </main>
 </div>
 
 <script type="module">
   import RFB from '/novnc/core/rfb.js';
 
-  const stateText = document.getElementById('stateText');
-  const meetingInfo = document.getElementById('meetingInfo');
-  const endBtn = document.getElementById('endBtn');
-  const msg = document.getElementById('msg');
-  const screenNote = document.getElementById('screenNote');
+  const $ = (id) => document.getElementById(id);
 
-  function showMsg(text, ok) {
-    msg.textContent = text;
-    msg.className = 'msg ' + (ok ? 'ok' : 'err');
+  function showMsg(el, text, ok) {
+    el.textContent = text;
+    el.className = 'msg ' + (ok ? 'ok' : 'err');
   }
 
   function elapsed(since) {
@@ -139,18 +322,32 @@
     return `hace ${Math.floor(mins / 60)} h ${mins % 60} min`;
   }
 
+  /* ---------- rail ---------- */
+  let adminVisible = false;
+  document.querySelectorAll('.rail-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.rail-item').forEach((b) => b.classList.toggle('active', b === btn));
+      const view = btn.dataset.view;
+      $('view-send').hidden = view !== 'send';
+      $('view-admin').hidden = view !== 'admin';
+      adminVisible = view === 'admin';
+      if (adminVisible) loadDiagnostics();
+    });
+  });
+
+  /* ---------- visor VNC ---------- */
   let rfb = null;
   function connectScreen() {
     if (rfb) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    rfb = new RFB(document.getElementById('screen'), `${proto}://${location.host}/api/vnc`);
+    rfb = new RFB($('screen'), `${proto}://${location.host}/api/vnc`);
     rfb.scaleViewport = true;
-    rfb.background = '#060a14';
-    rfb.addEventListener('connect', () => { screenNote.style.display = 'none'; });
+    rfb.background = '#0A0F0D';
+    rfb.addEventListener('connect', () => { $('screenNote').style.display = 'none'; });
     rfb.addEventListener('disconnect', () => {
       rfb = null;
-      screenNote.style.display = 'flex';
-      screenNote.textContent = 'Pantalla no disponible; reintentando…';
+      $('screenNote').style.display = 'flex';
+      $('screenNote').textContent = 'Pantalla no disponible; reintentando…';
     });
   }
   function disconnectScreen() {
@@ -158,67 +355,170 @@
       try { rfb.disconnect(); } catch (_) { /* ya cerrado */ }
       rfb = null;
     }
-    screenNote.style.display = 'flex';
-    screenNote.textContent = 'Conectando con la pantalla de la sala…';
+    $('screenNote').style.display = 'flex';
+    $('screenNote').textContent = 'Conectando con la pantalla de la sala…';
   }
 
+  /* ---------- wallpaper ---------- */
+  let wpState = {};
+  function renderWallpaper(data) {
+    wpState = data;
+    document.querySelectorAll('.swatch').forEach((s) => {
+      s.classList.toggle('active', s.dataset.wp === data.wallpaper);
+    });
+    const custom = document.querySelector('.swatch[data-wp="custom"]');
+    custom.hidden = !data.wallpaper_has_custom;
+    if (data.wallpaper_has_custom) {
+      custom.style.backgroundImage = `url(/wallpaper?v=${data.wallpaper_version})`;
+    }
+    $('wpDelete').hidden = !data.wallpaper_has_custom;
+  }
+  $('swatches').addEventListener('click', async (e) => {
+    const swatch = e.target.closest('.swatch');
+    if (!swatch) return;
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallpaper: swatch.dataset.wp }),
+    });
+    const data = await res.json();
+    if (res.ok) renderWallpaper(data);
+    else showMsg($('wpMsg'), data.detail || 'No se pudo cambiar', false);
+  });
+  $('wpUpload').addEventListener('click', () => $('wpFile').click());
+  $('wpFile').addEventListener('change', async () => {
+    const file = $('wpFile').files[0];
+    if (!file) return;
+    $('wpUpload').disabled = true;
+    try {
+      const res = await fetch('/api/wallpaper', {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        renderWallpaper(data);
+        showMsg($('wpMsg'), 'Imagen aplicada al kiosko ✓', true);
+      } else {
+        showMsg($('wpMsg'), data.detail || 'No se pudo subir la imagen', false);
+      }
+    } catch (_) {
+      showMsg($('wpMsg'), 'No se pudo contactar a la sala', false);
+    } finally {
+      $('wpUpload').disabled = false;
+      $('wpFile').value = '';
+    }
+  });
+  $('wpDelete').addEventListener('click', async () => {
+    const res = await fetch('/api/wallpaper', { method: 'DELETE' });
+    const data = await res.json();
+    if (res.ok) {
+      renderWallpaper(data);
+      showMsg($('wpMsg'), 'Imagen eliminada; el kiosko vuelve al gradiente', true);
+    }
+  });
+
+  /* ---------- diagnóstico ---------- */
+  function renderDevices(devices) {
+    const rows = [];
+    for (const cam of devices.cameras.length ? devices.cameras : [null]) {
+      rows.push({ icon: 'videocam', tag: 'Cámara', val: cam || 'No detectada' });
+    }
+    for (const audio of devices.audio.length ? devices.audio : [null]) {
+      rows.push({ icon: 'volume_up', tag: 'Audio', val: audio || 'No detectado' });
+    }
+    $('devices').innerHTML = rows.map((r) =>
+      `<div class="ro-field"><span class="tag">${r.tag}</span><span class="msr">${r.icon}</span><span class="val">${r.val}</span></div>`
+    ).join('');
+  }
+  async function loadDiagnostics() {
+    try {
+      const res = await fetch('/api/diagnostics');
+      const d = await res.json();
+      $('dPing').textContent = d.ping_ms != null ? `${d.ping_ms} ms` : '—';
+      $('dPingSub').textContent = d.ping_ms == null ? 'Sin internet'
+        : d.ping_ms < 50 ? 'Excelente' : d.ping_ms < 120 ? 'Buena' : 'Lenta';
+      $('dPingSub').className = 't-sub' + (d.ping_ms != null && d.ping_ms < 50 ? ' good' : '');
+      $('dCpu').textContent = `${d.cpu_percent}%`;
+      $('dCpuSub').textContent = d.cpu_percent < 70 ? 'Normal' : 'Alta';
+      $('dTemp').textContent = d.temp_c != null ? `${Math.round(d.temp_c)}°C` : 'N/D';
+      $('dTempSub').textContent = d.temp_c == null ? '' : d.temp_c < 75 ? 'Estable' : 'Caliente';
+      const days = Math.floor(d.uptime_seconds / 86400);
+      const hours = Math.floor((d.uptime_seconds % 86400) / 3600);
+      $('dUp').textContent = days > 0 ? `${days} d` : `${hours} h`;
+      $('dUpSub').textContent = `v${d.version}`;
+      const ok = d.online;
+      $('diagChipText').textContent = ok ? 'Todo operativo' : 'Sin internet';
+      $('diagChip').classList.toggle('off', !ok);
+      renderDevices(d.devices);
+    } catch (_) { /* siguiente ciclo */ }
+  }
+  setInterval(() => { if (adminVisible && !document.body.classList.contains('meeting')) loadDiagnostics(); }, 5000);
+
+  /* ---------- estado general ---------- */
   async function refresh() {
     try {
       const res = await fetch('/api/status');
       const data = await res.json();
+      renderWallpaper(data);
       if (data.state === 'meeting') {
-        meetingInfo.textContent = `En reunión (${elapsed(data.since)}) — ${data.url}`;
+        $('elapsed').textContent = ` · ${elapsed(data.since)}`;
+        $('meetingUrl').textContent = data.url;
         document.body.classList.add('meeting');
         connectScreen();
       } else {
         document.body.classList.remove('meeting');
         disconnectScreen();
-        stateText.textContent = 'Sala disponible';
+        $('stateText').textContent = data.online === false ? 'Sala sin internet' : 'Sala disponible';
+        $('stateChip').classList.toggle('off', data.online === false);
       }
-      document.getElementById('services').textContent = data.allowed_domains.length
+      $('services').textContent = data.allowed_domains.length
         ? 'Servicios permitidos: ' + data.allowed_domains.join(', ')
         : 'Se acepta cualquier enlace https';
     } catch (_) {
-      stateText.textContent = 'Sin conexión con la sala';
+      $('stateText').textContent = 'Sin conexión con la sala';
+      $('stateChip').classList.add('off');
     }
   }
   refresh();
   setInterval(refresh, 3000);
 
-  document.getElementById('form').addEventListener('submit', async (e) => {
+  /* ---------- enviar ---------- */
+  $('form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = document.getElementById('sendBtn');
-    btn.disabled = true;
+    $('sendBtn').disabled = true;
     try {
       const res = await fetch('/api/meeting', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: document.getElementById('url').value }),
+        body: JSON.stringify({ url: $('url').value }),
       });
       const data = await res.json();
       if (res.ok) {
-        document.getElementById('url').value = '';
+        $('url').value = '';
         refresh();
       } else {
-        showMsg(data.detail || 'URL rechazada', false);
+        showMsg($('msg'), data.detail || 'URL rechazada', false);
       }
     } catch (_) {
-      showMsg('No se pudo contactar a la sala', false);
+      showMsg($('msg'), 'No se pudo contactar a la sala', false);
     } finally {
-      btn.disabled = false;
+      $('sendBtn').disabled = false;
     }
   });
 
-  endBtn.addEventListener('click', async () => {
-    if (!confirm('¿Terminar la reunión y regresar la sala a la pantalla de inicio?')) return;
-    endBtn.disabled = true;
+  /* ---------- terminar sesión ---------- */
+  $('endBtn').addEventListener('click', async () => {
+    if (!confirm('¿Terminar la sesión y regresar la sala a la pantalla de inicio?')) return;
+    $('endBtn').disabled = true;
     try {
       await fetch('/api/end', { method: 'POST' });
-      showMsg('Reunión terminada; la sala vuelve a la pantalla de inicio', true);
+      showMsg($('msg'), 'Sesión terminada; la sala vuelve a la pantalla de inicio', true);
     } catch (_) {
-      showMsg('No se pudo contactar a la sala', false);
+      showMsg($('msg'), 'No se pudo contactar a la sala', false);
     } finally {
-      endBtn.disabled = false;
+      $('endBtn').disabled = false;
       refresh();
     }
   });

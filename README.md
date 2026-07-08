@@ -130,6 +130,26 @@ la sala), o iniciando sesión una sola vez en el Chromium del kiosko con una
 cuenta llamada como la sala — el perfil persiste entre reuniones y ambos toman
 el nombre de la cuenta. Automatizar ese pre-join vía extensión queda en fase 2.
 
+## Interfaz (Material Design 3)
+
+La UI implementa el diseño "Universal Meeting Appliance MD3":
+
+- **Kiosko idle**: reloj grande, fondo con esquema tonal Material You (4 presets de
+  gradiente o **imagen propia** subida desde el panel) y tarjeta con **QR** que
+  apunta a la dirección del panel. Si se pierde internet, la tarjeta cambia al
+  estado "Sin conexión" con su píldora roja.
+- **Panel de control**: navigation rail con dos vistas — **Enviar** (campo MD3 +
+  botón "Enviar a la sala") y **Configuración** (wallpaper del kiosko, dispositivos
+  detectados de solo lectura y diagnóstico real: latencia, CPU, temperatura, uptime
+  vía `GET /api/diagnostics`).
+- **Sesión activa**: top app bar con "Terminar sesión" y el escritorio de la sala
+  ocupando el resto (noVNC).
+
+Fuentes (Roboto Flex/Mono, Material Symbols subset) auto-hospedadas en
+`server/static/fonts/` — el kiosko no depende de CDNs para renderizar. El estado
+(wallpaper elegido e imagen subida) persiste en `/var/lib/meeting-room`
+(`StateDirectory`); en dev, en `.state/`.
+
 ## Pantalla de la sala en la página de control
 
 Cuando hay reunión activa, la página de control muestra el escritorio del kiosko

@@ -1,0 +1,45 @@
+/* Fuentes auto-hospedadas: el kiosko debe renderizar sin internet. */
+
+@font-face {
+  font-family: 'Roboto Flex';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url(/fonts/RobotoFlex.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'Roboto Mono';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url(/fonts/RobotoMono.woff2) format('woff2');
+}
+
+/* Subset: solo los iconos usados por la app (regenerar si se agregan nombres):
+   call_end cast check cloud_off delete device_thermostat hub info link
+   meeting_room memory mic monitor_heart network_check palette schedule
+   settings sync tune upload videocam volume_up wallpaper */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url(/fonts/MaterialSymbolsRounded.woff2) format('woff2');
+}
+
+.msr {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
