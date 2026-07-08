@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sala de Reuniones</title>
+<link rel="preload" href="/fonts/MaterialSymbolsRounded.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/fonts/fonts.css">
 <script src="/vendor/qrcode.js"></script>
 <style>
@@ -187,10 +188,19 @@
   .updating .title { font-size: clamp(32px, 4vw, 62px); font-weight: 640; }
   .updating .sub { font-size: clamp(18px, 1.5vw, 28px); color: var(--onsurfvar); }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .icon-preload {
+    position: fixed; left: -9999px; top: -9999px;
+    width: 1px; height: 1px; overflow: hidden; opacity: 0;
+    pointer-events: none; white-space: nowrap;
+  }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body data-scheme="bosque" data-clock="soft">
+  <div class="icon-preload" aria-hidden="true">
+    <span class="msr">call_end</span><span class="msr">cast</span><span class="msr">check</span><span class="msr">cloud_off</span><span class="msr">delete</span><span class="msr">device_thermostat</span><span class="msr">hub</span><span class="msr">info</span><span class="msr">link</span><span class="msr">meeting_room</span><span class="msr">memory</span><span class="msr">mic</span><span class="msr">monitor_heart</span><span class="msr">network_check</span><span class="msr">palette</span><span class="msr">schedule</span><span class="msr">settings</span><span class="msr">sync</span><span class="msr">tune</span><span class="msr">upload</span><span class="msr">videocam</span><span class="msr">volume_up</span><span class="msr">wallpaper</span>
+  </div>
+
   <div id="bg"></div>
   <div id="scrim"></div>
 

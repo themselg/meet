@@ -74,8 +74,10 @@ edítalo y reinicia `meeting-room-server` para cambiarla después.
 **Actualizar rápido:** `sudo ./update.sh` hace `git pull`, copia la app a
 `/opt/meeting-room`, recarga systemd y reinicia servicios sin reinstalar paquetes ni
 dependencias Python. Si cambió `server/requirements.txt`, usar
-`sudo ./update.sh --with-deps`. El panel de Configuración también puede disparar
-esta actualización; mientras corre, el kiosko muestra el estado "Actualizando".
+`sudo ./update.sh --with-deps`. SELinux se omite por velocidad; si necesitas
+restaurar contextos, usar `sudo ./update.sh --restorecon`. El panel de
+Configuración también puede disparar esta actualización; mientras corre, el kiosko
+muestra el estado "Actualizando".
 
 ### Verificación
 

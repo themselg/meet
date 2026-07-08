@@ -118,7 +118,8 @@ python3 "$REPO_DIR/scripts/make-hidden-cursor.py" "$APP_DIR/cursors"
 rm -rf /usr/share/icons/meeting-room-hidden  # ubicacion antigua
 
 echo "==> SELinux"
-command -v restorecon &>/dev/null && restorecon -R "$APP_DIR" || true
+command -v restorecon &>/dev/null && \
+  restorecon -R "$APP_DIR/server" "$APP_DIR/scripts" "$APP_DIR/update.sh" || true
 
 systemctl restart meeting-room-server.service
 

@@ -7,13 +7,15 @@ APP_DIR="${MEETING_APP_DIR:-/opt/meeting-room}"
 CONFIG_DIR=/etc/meeting-room
 UPDATE_ENV="$CONFIG_DIR/update.env"
 WITH_DEPS=0
+RUN_RESTORECON=0
 
 for arg in "$@"; do
   case "$arg" in
     --with-deps) WITH_DEPS=1 ;;
+    --restorecon) RUN_RESTORECON=1 ;;
     --from-panel) ;;
     *)
-      echo "Uso: $0 [--with-deps] [--from-panel]" >&2
+      echo "Uso: $0 [--with-deps] [--restorecon] [--from-panel]" >&2
       exit 2
       ;;
   esac
@@ -92,8 +94,11 @@ install -m 0644 "$REPO_DIR/system/meeting-room-kiosk.service" /etc/systemd/syste
 install -m 0440 "$REPO_DIR/system/sudoers-meeting-room" /etc/sudoers.d/meeting-room
 command -v visudo >/dev/null 2>&1 && visudo -cf /etc/sudoers.d/meeting-room
 
-if command -v restorecon >/dev/null 2>&1; then
-  restorecon -R "$APP_DIR" || true
+if [ "$RUN_RESTORECON" = "1" ] && command -v restorecon >/dev/null 2>&1; then
+  echo "==> SELinux (restorecon acotado)"
+  restorecon -R "$APP_DIR/server" "$APP_DIR/scripts" "$APP_DIR/update.sh" || true
+else
+  echo "==> SELinux: omitido (usar --restorecon si hace falta)"
 fi
 
 echo "==> Reiniciando servicios"
